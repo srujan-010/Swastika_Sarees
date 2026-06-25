@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Heart, ShoppingBag, Send, ShieldAlert, Star, MessageSquare, Truck, Check, Share2, Plus, Minus } from 'lucide-react';
+import { Heart, ShoppingBag, Send, ShieldAlert, Star, MessageSquare, Truck, Check, Share2, Plus, Minus, AlertTriangle } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useWishlistStore } from '../store/wishlistStore';
 import ProductCard from '../components/ProductCard';
@@ -266,10 +266,11 @@ export default function ProductDetail() {
             </div>
 
             {product.stock === 0 && (
-              <div className="absolute inset-0 bg-brand-dark/25 backdrop-blur-2xs flex items-center justify-center">
-                <span className="bg-brand-crimson text-brand-cream text-xs font-bold uppercase tracking-wider px-3.5 py-1.5 border border-brand-gold/30">
-                  Out Of Stock
-                </span>
+              <div className="absolute inset-0 bg-brand-dark/25 backdrop-blur-2xs flex items-center justify-center select-none pointer-events-none">
+                <div className="flex flex-col items-center justify-center bg-brand-crimson/95 border border-brand-gold/45 text-brand-cream p-5 rounded-full shadow-2xl animate-pulse" style={{ width: "130px", height: "130px" }}>
+                  <AlertTriangle size={32} className="text-brand-gold animate-bounce mb-1" />
+                  <span className="text-[10px] font-bold tracking-widest text-center uppercase leading-tight">OUT OF<br/>STOCK</span>
+                </div>
               </div>
             )}
           </div>

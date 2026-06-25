@@ -75,7 +75,12 @@ export default function ProductCard({ product, onQuickView }) {
         </button>
 
         {/* Status Badges (Top-Left) */}
-        <div className="absolute top-3 left-3 flex flex-col space-y-1.5 z-10 select-none">
+        <div className="absolute top-3 left-3 flex flex-col space-y-1.5 z-20 select-none">
+          {isOutOfStock && (
+            <span className="bg-brand-crimson text-brand-cream text-[9px] font-bold tracking-wider uppercase px-2 py-1 rounded-sm shadow-md border border-brand-gold/30">
+              OUT OF STOCK
+            </span>
+          )}
           {product.isNewArrival && (
             <span className="bg-brand-gold text-brand-cream text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-sm shadow-xs">
               NEW
@@ -103,13 +108,9 @@ export default function ProductCard({ product, onQuickView }) {
           />
         </Link>
 
-        {/* Out Of Stock Blurred Screen */}
+        {/* Out Of Stock Translucent White Window Overlay */}
         {isOutOfStock && (
-          <div className="absolute inset-0 bg-brand-dark/25 backdrop-blur-xs flex items-center justify-center z-10 select-none">
-            <span className="bg-brand-crimson text-brand-cream text-xs font-bold uppercase tracking-wider px-3.5 py-1.5 rounded-sm border border-brand-gold/30 shadow-lg">
-              Out Of Stock
-            </span>
-          </div>
+          <div className="absolute inset-0 bg-white/60 z-10 select-none" />
         )}
 
         {/* Hover Action Row (Quick View & Add to Cart) */}

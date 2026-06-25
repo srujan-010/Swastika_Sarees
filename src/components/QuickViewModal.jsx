@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { X, Heart, ShoppingBag, Plus, Minus, ChevronDown, ArrowRight } from "lucide-react";
+import { X, Heart, ShoppingBag, Plus, Minus, ChevronDown, ArrowRight, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
 import { useWishlistStore } from "../store/wishlistStore";
@@ -101,6 +101,13 @@ export default function QuickViewModal({ product, onClose }) {
             className="absolute inset-0 w-full h-full object-contain"
             style={{ transition: "opacity 0.35s ease" }}
           />
+
+          {product.stock === 0 && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-25 flex flex-col items-center justify-center bg-brand-crimson/95 border border-brand-gold/45 text-brand-cream p-4 rounded-full shadow-2xl animate-pulse select-none" style={{ width: "120px", height: "120px" }}>
+              <AlertTriangle size={28} className="text-brand-gold animate-bounce mb-1" />
+              <span className="text-[10px] font-bold tracking-widest text-center uppercase leading-tight">OUT OF<br/>STOCK</span>
+            </div>
+          )}
 
           {/* Gradient overlays */}
           <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.3) 100%)" }} />
