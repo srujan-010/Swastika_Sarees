@@ -1,0 +1,42 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# TypeScript v1.x command line compiler bug helper
+typings/
+
+# Output folders
+.vercel
+dist
+dist-ssr
+build
+out
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor configuration files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvsca*
+*.njsproj
+*.sln
+*.sw?

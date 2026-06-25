@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand-crimson: #8B1A1A;
+    --brand-gold: #C8832A;
+    --brand-gold-light: #E8A84C;
+    --brand-cream: #FFF8F0;
+    --brand-dark: #1A0505;
+    --brand-muted: #6B3A3A;
+    --brand-white: #FFFFFF;
+    --brand-border: #E8D5C4;
+  }
+
+  body {
+    @apply bg-brand-cream text-brand-dark font-sans antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-semibold;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--brand-cream);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--brand-muted);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-crimson);
+}
+
+/* Elegant gold shimmer background animation */
+.gold-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(200, 131, 42, 0.1) 25%,
+    rgba(232, 168, 76, 0.4) 50%,
+    rgba(200, 131, 42, 0.1) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.5s infinite linear;
+}
+
+/* Gold Text Shimmer */
+.text-shimmer {
+  background: linear-gradient(
+    to right,
+    #C8832A 20%,
+    #E8A84C 40%,
+    #E8A84C 60%,
+    #C8832A 80%
+  );
+  background-size: 200% auto;
+  color: transparent;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: shimmer 3s linear infinite;
+}
+
+/* Paisley dividers and decorative motifs */
+.paisley-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 1.5rem 0;
+  color: var(--brand-gold);
+}
+
+.paisley-divider::before,
+.paisley-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--brand-border), transparent);
+  margin: 0 1rem;
+}
+
+/* Glassmorphism card utility */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--brand-border);
+}
+
+/* Skeleton Loading Shimmer */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #E8D5C4 25%,
+    #FFF8F0 50%,
+    #E8D5C4 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
