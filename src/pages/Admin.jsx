@@ -176,6 +176,12 @@ export default function Admin() {
               <MessageSquare size={16} /> <span>Reviews</span>
             </button>
             <button
+              onClick={() => setActiveTab('homepage')}
+              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'homepage' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
+            >
+              <Image size={16} /> <span>Homepage Content</span>
+            </button>
+            <button
               onClick={() => setActiveTab('settings')}
               className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'settings' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
             >
@@ -216,6 +222,9 @@ export default function Admin() {
 
         {/* Tab 7: Reviews Moderation */}
         {activeTab === 'reviews' && <ReviewsView token={token} />}
+
+        {/* Tab 9: Homepage Custom Content */}
+        {activeTab === 'homepage' && <HomepageView token={token} />}
 
         {/* Tab 8: Settings Management */}
         {activeTab === 'settings' && <SettingsView token={token} />}
@@ -406,6 +415,7 @@ function ProductsView({ token: tokenProp }) {
     isNewArrival: false,
     imageUrl: '', // kept for backward compat / URL fallback
     variants: [], // { colorName, colorHex, size, stock, extraPricePaise }
+    showSizeChart: true
   });
 
   // Multi-image uploader state
@@ -643,6 +653,7 @@ function ProductsView({ token: tokenProp }) {
         ...v,
         extraPricePaise: (v.extraPricePaise / 100).toString()
       })) || [],
+      showSizeChart: prod.showSizeChart !== false
     });
     setFormOpen(true);
   };
@@ -691,7 +702,7 @@ function ProductsView({ token: tokenProp }) {
               setFormData({
                 name: '', slug: '', category: categories[0]?._id || '', description: '', fabric: '', careInstructions: '',
                 occasionTags: [], styleTags: [], price: '', originalPrice: '', stock: '10', sku: '', isActive: true,
-                isFeatured: false, isBestseller: false, isNewArrival: false, imageUrl: '', variants: []
+                isFeatured: false, isBestseller: false, isNewArrival: false, imageUrl: '', variants: [], showSizeChart: true
               });
               setFormOpen(true);
             }}
@@ -827,6 +838,10 @@ function ProductsView({ token: tokenProp }) {
                 <label className="flex items-center space-x-2.5 cursor-pointer">
                   <input type="checkbox" checked={formData.isNewArrival} onChange={(e) => setFormData({ ...formData, isNewArrival: e.target.checked })} className="rounded text-brand-crimson h-3.5 w-3.5 border-brand-border" />
                   <span>New Arrivals</span>
+                </label>
+                <label className="flex items-center space-x-2.5 cursor-pointer">
+                  <input type="checkbox" checked={formData.showSizeChart} onChange={(e) => setFormData({ ...formData, showSizeChart: e.target.checked })} className="rounded text-brand-crimson h-3.5 w-3.5 border-brand-border" />
+                  <span>Show Size Options & Size Chart</span>
                 </label>
               </div>
 
@@ -1977,6 +1992,416 @@ function ReviewsView({ token }) {
 }
 
 // -----------------------
+// 9. HOMEPAGE VIEW (Banners & Page Content)
+// -----------------------
+function HomepageView({ token: tokenProp }) {
+  const token = useAuthStore.getState().token || tokenProp;
+  const [banners, setBanners] = useState([]);
+  const [bannersLoading, setBannersLoading] = useState(true);
+  const [bannerFormOpen, setBannerFormOpen] = useState(false);
+  const [editingBanner, setEditingBanner] = useState(null);
+  
+  // Banner Form State
+  const [bannerForm, setBannerForm] = useState({
+    title: '',
+    subtitle: '',
+    ctaText: 'Explore Collection',
+    ctaLink: '/shop',
+    imageUrl: '',
+    displayOrder: 0,
+    isActive: true
+  });
+  const [bannerUploading, setBannerUploading] = useState(false);
+
+  // Settings/Content State (heading, description, split images)
+  const [settingsForm, setSettingsForm] = useState({
+    homeCategoryHeading: 'Shop by Category',
+    homeCategoryDescription: '',
+    homePromoHeading: 'Handpicked. Curated. Yours.',
+    homePromoDescription: '',
+    homePromoImage1: '',
+    homePromoImage2: '',
+    homePromoImage3: ''
+  });
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsSuccess, setSettingsSuccess] = useState('');
+  const [promoUploading, setPromoUploading] = useState({ 1: false, 2: false, 3: false });
+
+  const fetchBanners = async () => {
+    setBannersLoading(true);
+    try {
+      const res = await fetch('/api/banners/all', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBanners(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setBannersLoading(false);
+    }
+  };
+
+  const fetchSettings = async () => {
+    setSettingsLoading(true);
+    try {
+      const res = await fetch('/api/settings/admin', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSettingsForm({
+          homeCategoryHeading: data.homeCategoryHeading || 'Shop by Category',
+          homeCategoryDescription: data.homeCategoryDescription || '',
+          homePromoHeading: data.homePromoHeading || 'Handpicked. Curated. Yours.',
+          homePromoDescription: data.homePromoDescription || '',
+          homePromoImage1: data.homePromoImage1 || '',
+          homePromoImage2: data.homePromoImage2 || '',
+          homePromoImage3: data.homePromoImage3 || ''
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBanners();
+    fetchSettings();
+  }, [token]);
+
+  // Handle Banner upload to Cloudinary
+  const handleBannerImageUpload = async (file) => {
+    if (!file) return;
+    setBannerUploading(true);
+    try {
+      const payload = new FormData();
+      payload.append('image', file);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: payload
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setBannerForm(prev => ({ ...prev, imageUrl: data.url }));
+      } else {
+        alert(data.error || 'Upload failed');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Upload failed due to network error');
+    } finally {
+      setBannerUploading(false);
+    }
+  };
+
+  // Handle Promo Image upload to Cloudinary
+  const handlePromoImageUpload = async (file, imageIdx) => {
+    if (!file) return;
+    setPromoUploading(prev => ({ ...prev, [imageIdx]: true }));
+    try {
+      const payload = new FormData();
+      payload.append('image', file);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: payload
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setSettingsForm(prev => ({ ...prev, [`homePromoImage${imageIdx}`]: data.url }));
+      } else {
+        alert(data.error || 'Upload failed');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Upload failed due to network error');
+    } finally {
+      setPromoUploading(prev => ({ ...prev, [imageIdx]: false }));
+    }
+  };
+
+  const handleBannerSubmit = async (e) => {
+    e.preventDefault();
+    if (!bannerForm.imageUrl) {
+      alert('Image URL is required.');
+      return;
+    }
+    const method = editingBanner ? 'PUT' : 'POST';
+    const endpoint = editingBanner ? `/api/banners/${editingBanner._id}` : '/api/banners';
+
+    try {
+      const res = await fetch(endpoint, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(bannerForm)
+      });
+      if (res.ok) {
+        setBannerFormOpen(false);
+        setEditingBanner(null);
+        setBannerForm({
+          title: '',
+          subtitle: '',
+          ctaText: 'Explore Collection',
+          ctaLink: '/shop',
+          imageUrl: '',
+          displayOrder: 0,
+          isActive: true
+        });
+        fetchBanners();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Banner save failed');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleEditBanner = (ban) => {
+    setEditingBanner(ban);
+    setBannerForm({
+      title: ban.title || '',
+      subtitle: ban.subtitle || '',
+      ctaText: ban.ctaText || 'Explore Collection',
+      ctaLink: ban.ctaLink || '/shop',
+      imageUrl: ban.imageUrl || '',
+      displayOrder: ban.displayOrder || 0,
+      isActive: ban.isActive !== false
+    });
+    setBannerFormOpen(true);
+  };
+
+  const handleDeleteBanner = async (banId) => {
+    if (!confirm('Are you sure you want to delete this banner?')) return;
+    try {
+      const res = await fetch(`/api/banners/${banId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchBanners();
+      } else {
+        alert('Failed to delete banner');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSettingsSubmit = async (e) => {
+    e.preventDefault();
+    setSettingsSuccess('');
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(settingsForm)
+      });
+      if (res.ok) {
+        setSettingsSuccess('Homepage content updated successfully!');
+      } else {
+        alert('Failed to update homepage content settings');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <div className="space-y-8 text-left font-sans text-xs">
+      <div>
+        <h2 className="font-display font-bold text-brand-dark text-xl border-b pb-3 select-none">Homepage Content Management</h2>
+        <p className="text-brand-muted mt-1">Configure carousels, categories descriptions, split promo sections, and custom images.</p>
+      </div>
+
+      {/* SECTION 1: HERO BANNERS CAROUSEL CRUD */}
+      <div className="bg-brand-white border border-brand-border p-6 rounded-2xl shadow-md space-y-6">
+        <div className="flex justify-between items-center border-b pb-3">
+          <h3 className="font-display font-bold text-brand-dark text-sm">Main Hero Carousel Banners</h3>
+          <button
+            onClick={() => { setEditingBanner(null); setBannerFormOpen(true); }}
+            className="bg-brand-crimson hover:bg-brand-muted text-brand-cream px-3 py-1.5 rounded-lg flex items-center space-x-1 font-semibold transition-colors border border-brand-gold/30 text-2xs"
+          >
+            <Plus size={12} /> <span>Add Slide Banner</span>
+          </button>
+        </div>
+
+        {bannersLoading ? (
+          <div className="py-6 text-center text-brand-muted">Loading slide banners...</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {banners.map(ban => (
+              <div key={ban._id} className="border border-brand-border/60 rounded-xl p-4 flex gap-4 bg-brand-cream/10 relative">
+                <div className="w-24 h-16 rounded-md overflow-hidden bg-brand-cream shrink-0">
+                  <img src={ban.imageUrl} alt="" className="w-full h-full object-cover" />
+                </div>
+                <div className="flex-grow min-w-0 pr-8">
+                  <span className="font-bold text-brand-dark block truncate">{ban.title || 'Untitled Banner'}</span>
+                  <span className="text-3xs text-brand-muted block truncate mt-0.5">{ban.subtitle}</span>
+                  <div className="flex items-center space-x-3 mt-2 text-3xs font-semibold">
+                    <span className="text-brand-gold">Order: {ban.displayOrder}</span>
+                    <span className={ban.isActive ? 'text-emerald-600' : 'text-brand-crimson'}>
+                      {ban.isActive ? 'Active' : 'Hidden'}
+                    </span>
+                  </div>
+                </div>
+                <div className="absolute right-4 top-4 flex flex-col space-y-2 text-brand-muted">
+                  <button onClick={() => handleEditBanner(ban)} className="hover:text-brand-gold" title="Edit"><Edit size={12} /></button>
+                  <button onClick={() => handleDeleteBanner(ban._id)} className="hover:text-brand-crimson" title="Delete"><Trash2 size={12} /></button>
+                </div>
+              </div>
+            ))}
+            {banners.length === 0 && (
+              <p className="col-span-2 text-center text-brand-muted italic py-4">No slide banners found. Using storefront fallback placeholders.</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* BANNER EDIT MODAL */}
+      {bannerFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-dark/50 backdrop-blur-xs p-4">
+          <div className="fixed inset-0" onClick={() => { setBannerFormOpen(false); setEditingBanner(null); }} />
+          <form onSubmit={handleBannerSubmit} className="relative bg-brand-white border border-brand-border p-6 rounded-2xl w-full max-w-lg shadow-2xl z-10 space-y-4 font-sans text-xs text-left">
+            <h3 className="font-display font-bold text-brand-dark text-sm border-b pb-2">
+              {editingBanner ? 'Edit Carousel Banner' : 'Add New Carousel Banner'}
+            </h3>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col col-span-2">
+                <label className="font-semibold text-brand-dark mb-1">Banner Title</label>
+                <input type="text" value={bannerForm.title} onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })} className="bg-brand-cream border p-2 rounded focus:outline-none" required />
+              </div>
+              <div className="flex flex-col col-span-2">
+                <label className="font-semibold text-brand-dark mb-1">Subtitle / Description</label>
+                <textarea value={bannerForm.subtitle} onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })} rows={2} className="bg-brand-cream border p-2 rounded focus:outline-none" />
+              </div>
+              <div className="flex flex-col">
+                <label className="font-semibold text-brand-dark mb-1">CTA Action Button Text</label>
+                <input type="text" value={bannerForm.ctaText} onChange={(e) => setBannerForm({ ...bannerForm, ctaText: e.target.value })} className="bg-brand-cream border p-2 rounded focus:outline-none" />
+              </div>
+              <div className="flex flex-col">
+                <label className="font-semibold text-brand-dark mb-1">CTA Action Link</label>
+                <input type="text" value={bannerForm.ctaLink} onChange={(e) => setBannerForm({ ...bannerForm, ctaLink: e.target.value })} className="bg-brand-cream border p-2 rounded focus:outline-none" />
+              </div>
+              <div className="flex flex-col">
+                <label className="font-semibold text-brand-dark mb-1">Display Sort Order</label>
+                <input type="number" value={bannerForm.displayOrder} onChange={(e) => setBannerForm({ ...bannerForm, displayOrder: parseInt(e.target.value) || 0 })} className="bg-brand-cream border p-2 rounded focus:outline-none" />
+              </div>
+              <div className="flex items-center space-x-2.5 pt-4">
+                <input type="checkbox" checked={bannerForm.isActive} onChange={(e) => setBannerForm({ ...bannerForm, isActive: e.target.checked })} className="rounded text-brand-crimson h-3.5 w-3.5 border-brand-border" />
+                <span>Show in Slides</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col border-t pt-4">
+              <label className="font-semibold text-brand-dark mb-1">Banner Image URL *</label>
+              <div className="flex space-x-2">
+                <input type="text" value={bannerForm.imageUrl} onChange={(e) => setBannerForm({ ...bannerForm, imageUrl: e.target.value })} className="flex-grow bg-brand-cream border p-2 rounded focus:outline-none text-2xs" placeholder="Paste image URL here" />
+                <label className="bg-brand-dark hover:bg-brand-muted text-brand-cream px-3 py-2 rounded-md font-semibold cursor-pointer select-none text-center flex items-center justify-center min-w-[100px]">
+                  <input type="file" accept="image/*" className="hidden" disabled={bannerUploading} onChange={(e) => handleBannerImageUpload(e.target.files?.[0])} />
+                  {bannerUploading ? 'Uploading...' : 'Upload Image'}
+                </label>
+              </div>
+              {bannerForm.imageUrl && (
+                <div className="mt-3 aspect-[12/5] w-full rounded-lg overflow-hidden border border-brand-border">
+                  <img src={bannerForm.imageUrl} alt="Banner Preview" className="w-full h-full object-cover" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex space-x-2 pt-2">
+              <button type="submit" className="bg-brand-crimson text-brand-white px-5 py-2 rounded hover:bg-brand-muted font-semibold">Save Banner</button>
+              <button type="button" onClick={() => { setBannerFormOpen(false); setEditingBanner(null); }} className="bg-brand-white border text-brand-dark px-5 py-2 rounded hover:bg-brand-cream">Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* SECTION 2: OTHER HOMEPAGE HEADING AND SPLIT PROMO SECTION */}
+      <form onSubmit={handleSettingsSubmit} className="bg-brand-white border border-brand-border p-6 rounded-2xl shadow-md space-y-6">
+        <h3 className="font-display font-bold text-brand-dark text-sm border-b pb-3">Homepage Static Sections Content</h3>
+        
+        {settingsLoading ? (
+          <div className="py-6 text-center text-brand-muted">Loading static sections content...</div>
+        ) : (
+          <div className="space-y-6">
+            
+            {/* Category Grid Section Heading */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col">
+                <label className="font-semibold text-brand-dark mb-1">"Shop by Category" Title Heading</label>
+                <input type="text" value={settingsForm.homeCategoryHeading} onChange={(e) => setSettingsForm({ ...settingsForm, homeCategoryHeading: e.target.value })} className="bg-brand-cream border p-2 rounded focus:outline-none" />
+              </div>
+              <div className="flex flex-col">
+                <label className="font-semibold text-brand-dark mb-1">Category Section Description Text</label>
+                <input type="text" value={settingsForm.homeCategoryDescription} onChange={(e) => setSettingsForm({ ...settingsForm, homeCategoryDescription: e.target.value })} className="bg-brand-cream border p-2 rounded focus:outline-none" />
+              </div>
+            </div>
+
+            {/* Split Promotional Banner Section */}
+            <div className="border-t pt-4 space-y-4">
+              <h4 className="font-display font-bold text-brand-dark text-2xs uppercase tracking-wider text-brand-gold">Promotional Split Banner Section</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1">Split Promo Section Main Heading</label>
+                  <input type="text" value={settingsForm.homePromoHeading} onChange={(e) => setSettingsForm({ ...settingsForm, homePromoHeading: e.target.value })} className="bg-brand-cream border p-2 rounded focus:outline-none" />
+                </div>
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1">Split Promo Description Paragraph Text</label>
+                  <textarea value={settingsForm.homePromoDescription} onChange={(e) => setSettingsForm({ ...settingsForm, homePromoDescription: e.target.value })} rows={2} className="bg-brand-cream border p-2 rounded focus:outline-none" />
+                </div>
+              </div>
+
+              {/* Promo split images 1, 2, 3 */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                {[1, 2, 3].map(idx => (
+                  <div key={idx} className="flex flex-col border border-brand-border/60 p-3.5 rounded-xl bg-brand-cream/5">
+                    <label className="font-bold text-brand-dark mb-2.5">Promo Image {idx} *</label>
+                    <div className="aspect-square w-full rounded-lg overflow-hidden border border-brand-border bg-brand-cream relative mb-3">
+                      {settingsForm[`homePromoImage${idx}`] ? (
+                        <img src={settingsForm[`homePromoImage${idx}`]} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-brand-muted text-3xs italic">No Image</div>
+                      )}
+                    </div>
+                    <div className="flex space-x-1">
+                      <input type="text" value={settingsForm[`homePromoImage${idx}`]} onChange={(e) => setSettingsForm({ ...settingsForm, [`homePromoImage${idx}`]: e.target.value })} className="flex-grow bg-brand-cream border p-1 rounded focus:outline-none text-[10px] min-w-0" placeholder="Image URL" />
+                      <label className="bg-brand-dark hover:bg-brand-muted text-brand-cream px-2 py-1.5 rounded cursor-pointer select-none text-center text-3xs font-semibold whitespace-nowrap shrink-0">
+                        <input type="file" accept="image/*" className="hidden" disabled={promoUploading[idx]} onChange={(e) => handlePromoImageUpload(e.target.files?.[0], idx)} />
+                        {promoUploading[idx] ? '...' : 'Upload'}
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {settingsSuccess && <p className="text-xs text-emerald-600 font-semibold">{settingsSuccess}</p>}
+
+            <button type="submit" className="bg-brand-crimson hover:bg-brand-muted text-brand-cream px-6 py-2.5 rounded-lg font-semibold transition-colors border border-brand-gold/30">Save Homepage Static Sections</button>
+
+          </div>
+        )}
+
+      </form>
+    </div>
+  );
+}
+
+// -----------------------
 // 8. SETTINGS VIEW
 // -----------------------
 function SettingsView({ token }) {
@@ -1991,7 +2416,8 @@ function SettingsView({ token }) {
     nonServiceablePincodes: '',
     whatsAppNumber: '',
     returnPolicyText: '',
-    shippingPolicyText: ''
+    shippingPolicyText: '',
+    deliveryDays: '7'
   });
   const [success, setSuccess] = useState('');
 
@@ -2012,7 +2438,8 @@ function SettingsView({ token }) {
           nonServiceablePincodes: d.nonServiceablePincodes ? d.nonServiceablePincodes.join(', ') : '',
           whatsAppNumber: d.whatsAppNumber || '',
           returnPolicyText: d.returnPolicyText || '',
-          shippingPolicyText: d.shippingPolicyText || ''
+          shippingPolicyText: d.shippingPolicyText || '',
+          deliveryDays: d.deliveryDays !== undefined ? d.deliveryDays.toString() : '7'
         });
       })
       .catch(err => console.error(err));
@@ -2069,6 +2496,10 @@ function SettingsView({ token }) {
             <label className="font-semibold text-brand-dark mb-1">COD Handling Charge (INR)</label>
             <input type="number" value={form.codExtraCharge} onChange={(e) => setForm({ ...form, codExtraCharge: e.target.value })} className="bg-brand-cream border p-2 rounded focus:outline-none" />
           </div>
+          <div className="flex flex-col col-span-1">
+            <label className="font-semibold text-brand-dark mb-1">Expected Delivery Time Gap (Days)</label>
+            <input type="number" value={form.deliveryDays} onChange={(e) => setForm({ ...form, deliveryDays: e.target.value })} className="bg-brand-cream border p-2 rounded focus:outline-none" />
+          </div>
         </div>
 
         <div className="flex items-center space-x-2.5 pt-2 select-none">
@@ -2076,7 +2507,7 @@ function SettingsView({ token }) {
           <span>Enable Cash on Delivery option at Checkout</span>
         </div>
 
-        <div className="flex flex-col">
+        <div className="flex flex-col font-sans">
           <label className="font-semibold text-brand-dark mb-1">Non-serviceable Pincodes (Comma separated list)</label>
           <textarea value={form.nonServiceablePincodes} onChange={(e) => setForm({ ...form, nonServiceablePincodes: e.target.value })} placeholder="500001, 500002" className="bg-brand-cream border p-2.5 rounded focus:outline-none font-mono" />
         </div>

@@ -8,6 +8,7 @@ export default function OrderSuccess() {
   const { user } = useAuthStore();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState(null);
 
   useEffect(() => {
     // Fetch details of this successful order (using phone as bypass check if guest, but here we query details using user token if available)
@@ -34,8 +35,16 @@ export default function OrderSuccess() {
     fetchOrderDetails();
   }, [orderId, user]);
 
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(d => setSettings(d))
+      .catch(err => console.error(err));
+  }, []);
+
   const estDeliveryDate = new Date();
-  estDeliveryDate.setDate(estDeliveryDate.getDate() + 6); // standard 6 days estimate
+  const gap = settings?.deliveryDays !== undefined ? Number(settings.deliveryDays) : 7;
+  estDeliveryDate.setDate(estDeliveryDate.getDate() + gap);
 
   const getWhatsAppShareUrl = () => {
     const text = `I just ordered a beautiful outfit from Swastika Sarees! 🛍️ Check out their stunning Indian ethnic wear collections here: ${window.location.origin}`;

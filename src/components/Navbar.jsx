@@ -18,6 +18,20 @@ export default function Navbar() {
   const [cartCount, setCartCount] = useState(0);
   const [cartBounce, setCartBounce] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [settings, setSettings] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/categories')
+      .then(res => res.json())
+      .then(data => setCategories(data.filter(c => c.isActive !== false)))
+      .catch(err => console.error('Navbar categories fetch error:', err));
+
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => setSettings(data))
+      .catch(err => console.error('Navbar settings fetch error:', err));
+  }, []);
 
   // Close menus on page navigation
   useEffect(() => {
@@ -75,13 +89,58 @@ export default function Navbar() {
           </div>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex space-x-8">
+          <nav className="hidden md:flex items-center space-x-8">
             <Link to="/" className={`text-sm font-medium tracking-wide transition-colors ${location.pathname === '/' ? 'text-brand-crimson border-b-2 border-brand-crimson pb-1' : 'text-brand-dark hover:text-brand-crimson'}`}>Home</Link>
-            <Link to="/shop" className={`text-sm font-medium tracking-wide transition-colors ${location.pathname === '/shop' ? 'text-brand-crimson border-b-2 border-brand-crimson pb-1' : 'text-brand-dark hover:text-brand-crimson'}`}>Shop</Link>
+            
+            {/* Shop Hover Dropdown */}
+            <div className="relative group py-2">
+              <Link to="/shop" className={`text-sm font-medium tracking-wide transition-colors flex items-center space-x-1 ${location.pathname === '/shop' ? 'text-brand-crimson border-b-2 border-brand-crimson pb-1' : 'text-brand-dark hover:text-brand-crimson'}`}>
+                <span>Shop</span>
+                <ChevronDown size={12} className="group-hover:rotate-180 transition-transform duration-300" />
+              </Link>
+              {/* Dropdown Container */}
+              <div className="absolute left-0 top-full hidden group-hover:block z-50 pt-2">
+                <div className="w-56 bg-brand-white border border-brand-border rounded-xl shadow-xl py-3 px-1.5 animate-fadeIn">
+                  {categories.length > 0 ? (
+                    categories.map(cat => (
+                      <Link
+                        key={cat._id}
+                        to={`/shop?category=${cat.slug}`}
+                        className="flex items-center px-4 py-2.5 text-xs font-semibold text-brand-dark hover:bg-brand-cream hover:text-brand-crimson rounded-lg transition-colors"
+                      >
+                        {cat.name}
+                      </Link>
+                    ))
+                  ) : (
+                    <span className="block px-4 py-2 text-xs text-brand-muted italic">No categories loaded</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <Link to="/shop?new=true" className="text-sm font-medium tracking-wide text-brand-dark hover:text-brand-crimson transition-colors">New Arrivals</Link>
             <Link to="/shop?sale=true" className="text-sm font-medium tracking-wide text-brand-crimson hover:text-brand-gold transition-colors font-semibold">Sale</Link>
             <Link to="/about" className={`text-sm font-medium tracking-wide transition-colors ${location.pathname === '/about' ? 'text-brand-crimson border-b-2 border-brand-crimson pb-1' : 'text-brand-dark hover:text-brand-crimson'}`}>About</Link>
-            <Link to="/contact" className={`text-sm font-medium tracking-wide transition-colors ${location.pathname === '/contact' ? 'text-brand-crimson border-b-2 border-brand-crimson pb-1' : 'text-brand-dark hover:text-brand-crimson'}`}>Contact</Link>
+            
+            {/* Contact Hover Tooltip */}
+            <div className="relative group py-2">
+              <Link to="/contact" className={`text-sm font-medium tracking-wide transition-colors ${location.pathname === '/contact' ? 'text-brand-crimson border-b-2 border-brand-crimson pb-1' : 'text-brand-dark hover:text-brand-crimson'}`}>Contact</Link>
+              
+              {/* WhatsApp Tooltip Container */}
+              <div className="absolute left-1/2 -translate-x-1/2 top-full hidden group-hover:block z-50 pt-2">
+                <a
+                  href={`https://wa.me/${settings?.whatsAppNumber || '919999999999'}?text=Hi!%20I'm%20interested%20in%20shopping%20at%20Swastika%20Sarees.%20🙏`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-2 bg-[#25D366] hover:bg-[#128C7E] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl whitespace-nowrap transition-colors"
+                >
+                  <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.625 1.451 5.403.002 9.773-4.364 9.777-9.776.002-2.622-1.018-5.086-2.87-6.94A9.704 9.704 0 0 0 12.008 1.18c-5.409 0-9.782 4.368-9.786 9.785-.002 1.8.488 3.56 1.417 5.09L2.645 22.01l6.002-1.576zM17.973 14.73c-.324-.162-1.92-.949-2.217-1.058-.297-.108-.513-.162-.73.162-.216.324-.838 1.058-1.027 1.275-.19.216-.379.243-.703.08-1.62-.778-2.735-1.378-3.824-3.245-.297-.506.297-.47.85-1.579.088-.18.044-.337-.022-.472-.066-.135-.513-1.233-.703-1.689-.185-.446-.37-.385-.513-.392l-.438-.008c-.162 0-.427.061-.65.304-.224.243-.854.838-.854 2.043 0 1.206.878 2.372.999 2.535.122.162 1.728 2.637 4.19 3.7c.586.253 1.043.404 1.4.516.59.187 1.127.16 1.551.097.472-.07 1.92-.784 2.19-1.503.27-.719.27-1.334.19-1.469-.082-.136-.298-.217-.622-.38z" />
+                  </svg>
+                  <span>WhatsApp Us</span>
+                </a>
+              </div>
+            </div>
           </nav>
 
           {/* Header Action Icons */}

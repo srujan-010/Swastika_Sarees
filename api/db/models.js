@@ -80,7 +80,8 @@ const ProductSchema = new Schema({
   ratings: {
     average: { type: Number, default: 0 },
     count: { type: Number, default: 0 }
-  }
+  },
+  showSizeChart: { type: Boolean, default: true } // if false, hide size selector on storefront
 }, { timestamps: true });
 
 // Index for search optimization
@@ -204,7 +205,15 @@ const SettingSchema = new Schema({
   whatsAppNumber: { type: String, default: '919999999999' },
   returnPolicyText: { type: String, default: 'Easy 7-day returns on unused items.' },
   shippingPolicyText: { type: String, default: 'Free shipping on orders above Rs. 999. Standard delivery in 4-7 business days.' },
-  termsConditionsText: { type: String, default: 'Terms and Conditions govern store usage.' }
+  termsConditionsText: { type: String, default: 'Terms and Conditions govern store usage.' },
+  deliveryDays: { type: Number, default: 7 }, // expected delivery window in days
+  homeCategoryHeading: { type: String, default: 'Shop by Category' },
+  homeCategoryDescription: { type: String, default: 'Handcrafted fabrics tailored for festive sparkle, weddings, daily charm, and special moments.' },
+  homePromoHeading: { type: String, default: 'Handpicked. Curated. Yours.' },
+  homePromoDescription: { type: String, default: 'Unsure of fabric weight, shade match, or sizes? Skip the queue and consult directly with our catalog experts on WhatsApp for product videos, customized sizing checkups, and COD booking services.' },
+  homePromoImage1: { type: String, default: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=350' },
+  homePromoImage2: { type: String, default: 'https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?auto=format&fit=crop&q=80&w=350' },
+  homePromoImage3: { type: String, default: 'https://images.unsplash.com/photo-1608748010899-18f300247112?auto=format&fit=crop&q=80&w=350' }
 }, { timestamps: true });
 
 // Prevent model overwrite compiled errors on hot-reloading

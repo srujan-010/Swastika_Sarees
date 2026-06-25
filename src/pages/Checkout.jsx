@@ -20,6 +20,18 @@ export default function Checkout() {
   const [step, setStep] = useState(1);
   const [settings, setSettings] = useState(null);
   
+  const getExpectedDeliveryDateString = (daysGap = 7) => {
+    const today = new Date();
+    const deliveryDate = new Date(today);
+    deliveryDate.setDate(today.getDate() + Number(daysGap));
+    return deliveryDate.toLocaleDateString('en-IN', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+  
   // Address Form State
   const [address, setAddress] = useState({
     name: '',
@@ -708,6 +720,14 @@ export default function Checkout() {
           <div className="flex justify-between text-base font-bold text-brand-dark">
             <span>Amount Payable:</span>
             <span className="text-brand-crimson text-lg">₹{grandTotal.toLocaleString('en-IN')}</span>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-brand-border/60 text-xs font-sans text-brand-dark">
+            <span className="block font-semibold text-brand-muted uppercase text-[10px] tracking-wider mb-1 font-display">Expected Delivery Date</span>
+            <div className="flex items-center space-x-1.5 text-brand-crimson font-bold">
+              <span>{getExpectedDeliveryDateString(settings?.deliveryDays || 7)}</span>
+            </div>
+            <span className="text-[10px] text-brand-muted mt-0.5 block">Estimated based on standard transit time</span>
           </div>
         </div>
 

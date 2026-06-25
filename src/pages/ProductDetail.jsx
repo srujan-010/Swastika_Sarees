@@ -47,7 +47,8 @@ export default function ProductDetail() {
           // Select default variant choices
           const defaultVariant = data.variants?.[0];
           setSelectedColor(defaultVariant?.colorName || null);
-          setSelectedSize(defaultVariant?.size || null);
+          const showSizeInit = data.showSizeChart !== false && data.category?.slug !== 'sarees';
+          setSelectedSize(showSizeInit ? (defaultVariant?.size || null) : null);
           setActiveImageIndex(0);
           setQuantity(1);
 
@@ -139,6 +140,7 @@ export default function ProductDetail() {
 
   const uniqueColors = Array.from(colorsMap.entries()).map(([name, hex]) => ({ name, hex }));
   const uniqueSizes = Array.from(sizesMap.keys());
+  const showSize = product.showSizeChart !== false && product.category?.slug !== 'sarees';
 
   const handleAddToCart = () => {
     addItem({
@@ -157,6 +159,18 @@ export default function ProductDetail() {
   const handleBuyNow = () => {
     handleAddToCart();
     navigate('/cart');
+  };
+
+  const getExpectedDeliveryDateString = (daysGap = 7) => {
+    const today = new Date();
+    const deliveryDate = new Date(today);
+    deliveryDate.setDate(today.getDate() + Number(daysGap));
+    return deliveryDate.toLocaleDateString('en-IN', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   };
 
   // WhatsApp Pre-filled message generator
@@ -371,7 +385,7 @@ export default function ProductDetail() {
             )}
 
             {/* Size select buttons */}
-            {uniqueSizes.length > 0 && (
+            {showSize && uniqueSizes.length > 0 && (
               <div>
                 <span className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2.5">
                   Select Size: <span className="text-brand-gold font-sans">{selectedSize}</span>
@@ -496,6 +510,17 @@ export default function ProductDetail() {
             )}
           </div>
 
+          {/* Expected Delivery Date Block */}
+          <div className="bg-brand-white border border-brand-border/60 p-4 rounded-xl mb-6 select-none font-sans text-xs">
+            <span className="block text-xs font-semibold text-brand-dark uppercase tracking-wider mb-2 font-display">Expected Delivery Date</span>
+            <div className="flex items-center space-x-2 text-brand-dark mt-1">
+              <span className="font-bold text-brand-crimson text-sm">
+                {getExpectedDeliveryDateString(settings?.deliveryDays || 7)}
+              </span>
+              <span className="text-3xs text-brand-muted font-medium">({settings?.deliveryDays || 7} Days Gap)</span>
+            </div>
+          </div>
+
           {/* Promo Strip */}
           <div className="bg-brand-gold/10 text-brand-dark text-center py-2.5 px-4 rounded-md border border-brand-gold/20 text-xs font-medium tracking-wide select-none">
             🎁 Use code <strong>FIRST10</strong> for 10% off | Free shipping above ₹999
@@ -512,10 +537,10 @@ export default function ProductDetail() {
         <div className="flex border-b border-brand-border/60">
           {[
             { id: 'description', label: 'Description' },
-            { id: 'size_guide', label: 'Size Guide' },
+            showSize && { id: 'size_guide', label: 'Size Guide' },
             { id: 'shipping_policy', label: 'Shipping & Returns' },
             { id: 'reviews', label: `Reviews (${reviewsData.reviews?.length || 0})` }
-          ].map(tab => (
+          ].filter(Boolean).map(tab => (
             <button
               key={tab.id}
               onClick={() => {

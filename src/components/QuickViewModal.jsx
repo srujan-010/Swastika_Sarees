@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { X, Heart, ShoppingBag, Plus, Minus, ChevronDown, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useCartStore } from "../store/cartStore";
@@ -21,7 +21,8 @@ export default function QuickViewModal({ product, onClose }) {
     if (product) {
       const defaultVariant = product.variants?.[0];
       setSelectedColor(defaultVariant?.colorName || null);
-      setSelectedSize(defaultVariant?.size || null);
+      const showSizeInit = product.showSizeChart !== false && product.category?.slug !== 'sarees';
+      setSelectedSize(showSizeInit ? (defaultVariant?.size || null) : null);
       setActiveImageIndex(0);
       setQuantity(1);
       setScrolled(false);
@@ -61,6 +62,7 @@ export default function QuickViewModal({ product, onClose }) {
   });
   const uniqueColors = Array.from(colorsMap.entries()).map(([name, hex]) => ({ name, hex }));
   const uniqueSizes = Array.from(sizesMap.keys());
+  const showSize = product.showSizeChart !== false && product.category?.slug !== 'sarees';
 
   const handleAddToCart = () => {
     addItem({
@@ -96,7 +98,7 @@ export default function QuickViewModal({ product, onClose }) {
           <img
             src={images[activeImageIndex]?.url}
             alt={product.name}
-            className="absolute inset-0 w-full h-full object-cover object-top"
+            className="absolute inset-0 w-full h-full object-contain"
             style={{ transition: "opacity 0.35s ease" }}
           />
 
@@ -203,7 +205,7 @@ export default function QuickViewModal({ product, onClose }) {
                 </div>
               </div>
             )}
-            {uniqueSizes.length > 0 && (
+            {showSize && uniqueSizes.length > 0 && (
               <div>
                 <span className="block text-xs font-semibold uppercase tracking-wider mb-2.5 text-gray-800">
                   Size: <span style={{ color: "#8B1A1A", textTransform: "none" }}>{selectedSize}</span>

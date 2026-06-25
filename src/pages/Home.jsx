@@ -9,6 +9,7 @@ export default function Home() {
   const [categories, setCategories] = useState([]);
   const [collections, setCollections] = useState({ featured: [], bestsellers: [], newArrivals: [] });
   const [reviews, setReviews] = useState([]);
+  const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quickViewProduct, setQuickViewProduct] = useState(null);
   const [activeBannerIndex, setActiveBannerIndex] = useState(0);
@@ -16,6 +17,13 @@ export default function Home() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch settings
+        const setRes = await fetch('/api/settings');
+        if (setRes.ok) {
+          const setData = await setRes.json();
+          setSettings(setData);
+        }
+
         // Fetch banners
         const banRes = await fetch('/api/banners');
         const banData = await banRes.json();
@@ -187,11 +195,11 @@ export default function Home() {
       {/* 2. CATEGORY GRID */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center select-none">
         <h2 className="font-display text-2xl sm:text-4xl text-brand-dark tracking-wide font-bold">
-          Shop by Category
+          {settings?.homeCategoryHeading || 'Shop by Category'}
         </h2>
         <div className="paisley-divider">⚜️</div>
         <p className="text-sm text-brand-muted/80 max-w-lg mx-auto mb-10">
-          Handcrafted fabrics tailored for festive sparkle, weddings, daily charm, and special moments.
+          {settings?.homeCategoryDescription || 'Handcrafted fabrics tailored for festive sparkle, weddings, daily charm, and special moments.'}
         </p>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
@@ -259,14 +267,14 @@ export default function Home() {
         <div className="w-full md:w-1/2 p-8 sm:p-16 flex flex-col justify-center text-left space-y-4">
           <span className="text-brand-gold font-sans font-bold tracking-widest text-xs uppercase">Bespoke Boutique Experience</span>
           <h2 className="font-display text-3xl sm:text-4xl font-bold leading-tight">
-            Handpicked. Curated. Yours.
+            {settings?.homePromoHeading || 'Handpicked. Curated. Yours.'}
           </h2>
           <p className="font-sans text-sm text-brand-cream/70 leading-relaxed max-w-md">
-            Unsure of fabric weight, shade match, or sizes? Skip the queue and consult directly with our catalog experts on WhatsApp for product videos, customized sizing checkups, and COD booking services.
+            {settings?.homePromoDescription || 'Unsure of fabric weight, shade match, or sizes? Skip the queue and consult directly with our catalog experts on WhatsApp for product videos, customized sizing checkups, and COD booking services.'}
           </p>
           <div className="pt-2">
             <a
-              href="https://wa.me/919999999999?text=Hi!%20I'm%20interested%20in%20shopping%20at%20Swastika%20Sarees.%20Could%20you%20share%20the%20latest%20arrivals%20catalog?%20🙏"
+              href={`https://wa.me/${settings?.whatsAppNumber || '919999999999'}?text=Hi!%20I'm%20interested%20in%20shopping%20at%20Swastika%20Sarees.%20Could%20you%20share%20the%20latest%20arrivals%20catalog?%20🙏`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center space-x-2 bg-[#25D366] hover:bg-[#128C7E] text-white px-5 py-3 rounded-lg text-sm font-semibold transition-colors shadow-lg"
@@ -280,13 +288,13 @@ export default function Home() {
         {/* Right block: collage/grid of 3 mock images */}
         <div className="w-full md:w-1/2 grid grid-cols-3 aspect-video md:aspect-auto md:min-h-[400px]">
           <div className="h-full overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=350" alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+            <img src={settings?.homePromoImage1 || "https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=350"} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
           </div>
           <div className="h-full overflow-hidden border-l border-r border-brand-gold/20">
-            <img src="https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?auto=format&fit=crop&q=80&w=350" alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+            <img src={settings?.homePromoImage2 || "https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?auto=format&fit=crop&q=80&w=350"} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
           </div>
           <div className="h-full overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1608748010899-18f300247112?auto=format&fit=crop&q=80&w=350" alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+            <img src={settings?.homePromoImage3 || "https://images.unsplash.com/photo-1608748010899-18f300247112?auto=format&fit=crop&q=80&w=350"} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
           </div>
         </div>
       </section>
