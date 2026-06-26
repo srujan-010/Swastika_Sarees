@@ -35,16 +35,18 @@ export default function Shop() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState(null);
 
-  // Filter States (Synced with searchParams when page loads)
-  const [selectedCats, setSelectedCats] = useState([]);
-  const [selectedFabrics, setSelectedFabrics] = useState([]);
-  const [selectedSizes, setSelectedSizes] = useState([]);
-  const [selectedColors, setSelectedColors] = useState([]);
+  // Derive filter values directly from searchParams on every render
+  const selectedCats = searchParams.get('category') ? searchParams.get('category').split(',') : [];
+  const selectedFabrics = searchParams.get('fabric') ? searchParams.get('fabric').split(',') : [];
+  const selectedSizes = searchParams.get('size') ? searchParams.get('size').split(',') : [];
+  const selectedColors = searchParams.get('color') ? searchParams.get('color').split(',') : [];
+  const minRating = searchParams.get('rating') || '';
+  const inStockOnly = searchParams.get('inStock') === 'true';
+  const minDiscount = searchParams.get('discount') || '';
+  const sortOrder = searchParams.get('sort') || 'newest';
+
+  // We keep local state for price inputs so typing is smooth, but we sync them when URL changes
   const [priceRange, setPriceRange] = useState({ min: '', max: '' });
-  const [minRating, setMinRating] = useState('');
-  const [inStockOnly, setInStockOnly] = useState(false);
-  const [minDiscount, setMinDiscount] = useState('');
-  const [sortOrder, setSortOrder] = useState('newest');
 
   // Load initial settings & categories
   useEffect(() => {
@@ -54,25 +56,12 @@ export default function Shop() {
       .catch(err => console.error('Failed to load categories', err));
   }, []);
 
-  // Parse filters from URL searchParams
+  // Sync price inputs and reset page when URL searchParams change
   useEffect(() => {
-    const cats = searchParams.get('category') ? searchParams.get('category').split(',') : [];
-    const fabs = searchParams.get('fabric') ? searchParams.get('fabric').split(',') : [];
-    const szs = searchParams.get('size') ? searchParams.get('size').split(',') : [];
-    const cols = searchParams.get('color') ? searchParams.get('color').split(',') : [];
-    
-    setSelectedCats(cats);
-    setSelectedFabrics(fabs);
-    setSelectedSizes(szs);
-    setSelectedColors(cols);
     setPriceRange({
       min: searchParams.get('minPrice') || '',
       max: searchParams.get('maxPrice') || ''
     });
-    setMinRating(searchParams.get('rating') || '');
-    setInStockOnly(searchParams.get('inStock') === 'true');
-    setMinDiscount(searchParams.get('discount') || '');
-    setSortOrder(searchParams.get('sort') || 'newest');
     setPage(1); // Reset page to 1 whenever filters change
   }, [searchParams]);
 
@@ -82,16 +71,28 @@ export default function Shop() {
     try {
       const queryParams = new URLSearchParams();
       
-      if (selectedCats.length) queryParams.set('category', selectedCats.join(','));
-      if (selectedFabrics.length) queryParams.set('fabric', selectedFabrics.join(','));
-      if (selectedSizes.length) queryParams.set('size', selectedSizes.join(','));
-      if (selectedColors.length) queryParams.set('color', selectedColors.join(','));
+      const cats = searchParams.get('category');
+      const subcat = searchParams.get('subcategory');
+      const fabrics = searchParams.get('fabric');
+      const sizes = searchParams.get('size');
+      const colors = searchParams.get('color');
+      const minPrice = searchParams.get('minPrice');
+      const maxPrice = searchParams.get('maxPrice');
+      const rating = searchParams.get('rating');
+      const inStock = searchParams.get('inStock');
+      const discount = searchParams.get('discount');
+      const sort = searchParams.get('sort') || 'newest';
       
-      if (priceRange.min) queryParams.set('minPrice', priceRange.min);
-      if (priceRange.max) queryParams.set('maxPrice', priceRange.max);
-      if (minRating) queryParams.set('rating', minRating);
-      if (inStockOnly) queryParams.set('inStock', 'true');
-      if (minDiscount) queryParams.set('discount', minDiscount);
+      if (cats) queryParams.set('category', cats);
+      if (subcat) queryParams.set('subcategory', subcat);
+      if (fabrics) queryParams.set('fabric', fabrics);
+      if (sizes) queryParams.set('size', sizes);
+      if (colors) queryParams.set('color', colors);
+      if (minPrice) queryParams.set('minPrice', minPrice);
+      if (maxPrice) queryParams.set('maxPrice', maxPrice);
+      if (rating) queryParams.set('rating', rating);
+      if (inStock) queryParams.set('inStock', inStock);
+      if (discount) queryParams.set('discount', discount);
       
       const search = searchParams.get('search');
       if (search) queryParams.set('search', search);
@@ -102,7 +103,7 @@ export default function Shop() {
       const isSaleParam = searchParams.get('sale');
       if (isSaleParam) queryParams.set('discount', '10'); // minimum 10% off for sale
 
-      queryParams.set('sort', sortOrder);
+      queryParams.set('sort', sort);
       queryParams.set('page', currentPage.toString());
       queryParams.set('limit', '12');
 
@@ -127,7 +128,7 @@ export default function Shop() {
 
   useEffect(() => {
     fetchProducts(page, page > 1);
-  }, [selectedCats, selectedFabrics, selectedSizes, selectedColors, priceRange, minRating, inStockOnly, minDiscount, sortOrder, searchParams, page]);
+  }, [searchParams, page]);
 
   // Update URL search parameters when filters are toggled
   const applyFiltersToUrl = (newFilters) => {
@@ -231,9 +232,11 @@ export default function Shop() {
         {/* Count Description */}
         <div className="text-left mb-4 sm:mb-0">
           <h1 className="font-display font-bold text-brand-dark text-2xl tracking-wide">
-            {searchParams.get('category') 
-              ? searchParams.get('category').toUpperCase()
-              : 'Our Collections'}
+            {searchParams.get('subcategory')
+              ? `${searchParams.get('category')?.replace(/-/g, ' ').toUpperCase()} > ${searchParams.get('subcategory')?.replace(/-/g, ' ').toUpperCase()}`
+              : searchParams.get('category') 
+                ? searchParams.get('category')?.replace(/-/g, ' ').toUpperCase()
+                : 'Our Collections'}
           </h1>
           <span className="text-xs text-brand-muted font-sans leading-none">
             Showing {products.length} of {totalProducts} premium products
@@ -566,9 +569,19 @@ export default function Shop() {
           <div className="relative flex flex-col w-full max-w-xs bg-brand-white h-full shadow-2xl p-6 border-r border-brand-border overflow-y-auto text-left select-none animate-shimmer-once">
             <div className="flex items-center justify-between border-b border-brand-border/60 pb-3 mb-5">
               <span className="font-semibold text-brand-dark">Filters</span>
-              <button onClick={() => setFiltersOpen(false)} className="text-brand-dark hover:text-brand-crimson">
-                <X size={20} />
-              </button>
+              <div className="flex items-center space-x-3">
+                {(selectedCats.length > 0 || selectedFabrics.length > 0 || selectedSizes.length > 0 || selectedColors.length > 0 || priceRange.min || priceRange.max || minRating || inStockOnly || minDiscount) && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="text-2xs font-bold text-brand-crimson flex items-center hover:underline mr-1"
+                  >
+                    <RotateCcw size={10} className="mr-0.5" /> Clear All
+                  </button>
+                )}
+                <button onClick={() => setFiltersOpen(false)} className="text-brand-dark hover:text-brand-crimson">
+                  <X size={20} />
+                </button>
+              </div>
             </div>
             
             {/* Same Sidebar Content */}

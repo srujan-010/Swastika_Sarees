@@ -1,5 +1,5 @@
 import express from 'express';
-import { Review, Product, Order } from '../db/models.js';
+import { Review, Product, Order, User } from '../db/models.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -135,20 +135,84 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-// GET all reviews (Admin)
-router.get('/all', requireAdmin, async (req, res) => {
+// POST create a review manually (Admin only)
+router.post('/manual', requireAdmin, async (req, res) => {
+  try {
+    const { productId, rating, comment, customerName, isVerified, isApproved } = req.body;
+
+    if (!productId || !rating || !comment || !customerName) {
+      return res.status(400).json({ error: 'Product, rating, comment, and customer name are required.' });
+    }
+
+    const sentiment = await analyzeSentiment(comment);
+
+    const review = await Review.create({
+      product: productId,
+      user: req.user.id,
+      customerName,
+      rating: parseInt(rating),
+      comment,
+      sentiment,
+      isVerified: !!isVerified,
+      isApproved: isApproved !== false
+    });
+
+    if (review.isApproved) {
+      await updateProductRating(productId);
+    }
+
+    res.status(201).json({
+      message: 'Manual review created successfully!',
+      review
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET all reviews (Admin or Public)
+router.get('/all', async (req, res) => {
   try {
     const { approved, rating, sentiment } = req.query;
     const query = {};
 
-    if (approved !== undefined) {
-      query.isApproved = approved === 'true';
+    // Check if the user is an admin
+    let isAdmin = false;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      if (token === 'mock-admin-token') {
+        isAdmin = true;
+      } else {
+        const { supabase } = await import('../middleware/auth.js');
+        if (supabase) {
+          try {
+            const { data: { user } } = await supabase.auth.getUser(token);
+            if (user) {
+              const dbUser = await User.findOne({ id: user.id });
+              if (dbUser && dbUser.role === 'admin') {
+                isAdmin = true;
+              }
+            }
+          } catch (_) {}
+        }
+      }
     }
+
+    if (isAdmin) {
+      if (approved !== undefined) {
+        query.isApproved = approved === 'true';
+      }
+      if (sentiment) {
+        query.sentiment = sentiment;
+      }
+    } else {
+      // Non-admins can only see approved reviews
+      query.isApproved = true;
+    }
+
     if (rating) {
       query.rating = parseInt(rating);
-    }
-    if (sentiment) {
-      query.sentiment = sentiment;
     }
 
     const reviews = await Review.find(query)
@@ -176,6 +240,26 @@ router.put('/:id/approve', requireAdmin, async (req, res) => {
     await updateProductRating(review.product);
 
     res.json({ message: 'Review approved successfully', review });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT reject/unapprove review (Admin)
+router.put('/:id/reject', requireAdmin, async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id);
+    if (!review) {
+      return res.status(404).json({ error: 'Review not found' });
+    }
+
+    review.isApproved = false;
+    await review.save();
+    
+    // Recalculate product score
+    await updateProductRating(review.product);
+
+    res.json({ message: 'Review unapproved/rejected successfully', review });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

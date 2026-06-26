@@ -76,11 +76,6 @@ export default function ProductCard({ product, onQuickView }) {
 
         {/* Status Badges (Top-Left) */}
         <div className="absolute top-3 left-3 flex flex-col space-y-1.5 z-20 select-none">
-          {isOutOfStock && (
-            <span className="bg-brand-crimson text-brand-cream text-[9px] font-bold tracking-wider uppercase px-2 py-1 rounded-sm shadow-md border border-brand-gold/30">
-              OUT OF STOCK
-            </span>
-          )}
           {product.isNewArrival && (
             <span className="bg-brand-gold text-brand-cream text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-sm shadow-xs">
               NEW
@@ -108,30 +103,44 @@ export default function ProductCard({ product, onQuickView }) {
           />
         </Link>
 
-        {/* Out Of Stock Translucent White Window Overlay */}
+        {/* Out Of Stock Translucent White Window Overlay & Centered Badge */}
         {isOutOfStock && (
-          <div className="absolute inset-0 bg-white/60 z-10 select-none" />
+          <div className="absolute inset-0 bg-white/40 z-10 select-none flex items-center justify-center pointer-events-none">
+            <span className="bg-white/90 backdrop-blur-xs text-brand-dark text-[10px] sm:text-xs font-bold tracking-widest uppercase px-3.5 py-2 rounded-full border border-white/20 shadow-md">
+              OUT OF STOCK
+            </span>
+          </div>
         )}
 
         {/* Hover Action Row (Quick View & Add to Cart) */}
-        {!isOutOfStock && (
-          <div className="absolute bottom-0 left-0 w-full p-3 flex justify-between items-center bg-gradient-to-t from-brand-dark/50 to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10 select-none">
+        <div className="absolute bottom-0 left-0 w-full p-3 flex justify-between items-center bg-gradient-to-t from-brand-dark/50 to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-20 select-none">
+          {isOutOfStock ? (
             <button
               onClick={() => onQuickView(product)}
-              className="flex items-center space-x-1 bg-brand-white hover:bg-brand-cream text-brand-dark px-3 py-1.5 rounded-md text-xs font-medium transition-colors shadow-md"
+              className="mx-auto flex items-center space-x-1 bg-brand-white hover:bg-brand-cream text-brand-dark px-4 py-2 rounded-md text-xs font-medium transition-colors shadow-md"
             >
               <Eye size={12} />
               <span>Quick View</span>
             </button>
-            <button
-              onClick={handleAddToCart}
-              className="flex items-center space-x-1 bg-brand-crimson hover:bg-brand-muted text-brand-cream px-3 py-1.5 rounded-md text-xs font-medium transition-colors shadow-md border border-brand-gold/25"
-            >
-              <ShoppingCart size={12} />
-              <span>Add to Cart</span>
-            </button>
-          </div>
-        )}
+          ) : (
+            <>
+              <button
+                onClick={() => onQuickView(product)}
+                className="flex items-center space-x-1 bg-brand-white hover:bg-brand-cream text-brand-dark px-3 py-1.5 rounded-md text-xs font-medium transition-colors shadow-md"
+              >
+                <Eye size={12} />
+                <span>Quick View</span>
+              </button>
+              <button
+                onClick={handleAddToCart}
+                className="flex items-center space-x-1 bg-brand-crimson hover:bg-brand-muted text-brand-cream px-3 py-1.5 rounded-md text-xs font-medium transition-colors shadow-md border border-brand-gold/25"
+              >
+                <ShoppingCart size={12} />
+                <span>Add to Cart</span>
+              </button>
+            </>
+          )}
+        </div>
 
       </div>
 

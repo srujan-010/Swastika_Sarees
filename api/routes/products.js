@@ -1,5 +1,5 @@
 import express from 'express';
-import { Product, Category } from '../db/models.js';
+import { Product, Category, Setting } from '../db/models.js';
 import { requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -7,7 +7,15 @@ const router = express.Router();
 // GET featured, bestseller, new arrival collections (Storefront homepage)
 router.get('/collections', async (req, res) => {
   try {
-    const featured = await Product.find({ isActive: true, isFeatured: true }).populate('category').limit(8);
+    let featuredQuery = { isActive: true, isFeatured: true };
+    
+    // Check if a specific category is configured as the featured collection
+    const settings = await Setting.findOne();
+    if (settings && settings.homeFeaturedCategory) {
+      featuredQuery = { isActive: true, category: settings.homeFeaturedCategory };
+    }
+
+    const featured = await Product.find(featuredQuery).populate('category').limit(8);
     const bestsellers = await Product.find({ isActive: true, isBestseller: true }).populate('category').limit(8);
     const newArrivals = await Product.find({ isActive: true, isNewArrival: true }).populate('category').limit(8);
     res.json({ featured, bestsellers, newArrivals });
@@ -21,6 +29,7 @@ router.get('/', async (req, res) => {
   try {
     const {
       category, // category slug
+      subcategory, // subcategory slug
       minPrice, // in INR
       maxPrice, // in INR
       fabric, // comma separated
@@ -36,6 +45,10 @@ router.get('/', async (req, res) => {
     } = req.query;
 
     const query = { isActive: true };
+
+    if (subcategory) {
+      query.subCategory = subcategory;
+    }
 
     // 1. Category filter
     if (category) {
@@ -94,12 +107,22 @@ router.get('/', async (req, res) => {
       };
     }
 
-    // 9. Search filter (text index search or regex search)
+    // 9. Search filter (improved regex search across name, description, fabric, tags, and category)
     if (search) {
+      const escapedSearch = search.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+      const searchRegex = new RegExp(escapedSearch, 'i');
+      
+      // Find matching categories to support searching by category name
+      const matchingCategories = await Category.find({ name: searchRegex });
+      const matchingCatIds = matchingCategories.map(c => c._id);
+
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { fabric: { $regex: search, $options: 'i' } }
+        { name: searchRegex },
+        { description: searchRegex },
+        { fabric: searchRegex },
+        { occasionTags: searchRegex },
+        { styleTags: searchRegex },
+        { category: { $in: matchingCatIds } }
       ];
     }
 
@@ -138,11 +161,29 @@ router.get('/', async (req, res) => {
 // GET all products list for Admin CMS (without filters except search/category)
 router.get('/all', requireAdmin, async (req, res) => {
   try {
-    const { search, category, status, stock, page = 1, limit = 10 } = req.query;
+    const { search, category, subcategory, status, stock, page = 1, limit = 10 } = req.query;
     const query = {};
 
+    if (subcategory) {
+      query.subCategory = subcategory;
+    }
+
     if (search) {
-      query.name = { $regex: search, $options: 'i' };
+      const escapedSearch = search.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+      const searchRegex = new RegExp(escapedSearch, 'i');
+      
+      // Find matching categories to support searching by category name
+      const matchingCategories = await Category.find({ name: searchRegex });
+      const matchingCatIds = matchingCategories.map(c => c._id);
+
+      query.$or = [
+        { name: searchRegex },
+        { description: searchRegex },
+        { fabric: searchRegex },
+        { occasionTags: searchRegex },
+        { styleTags: searchRegex },
+        { category: { $in: matchingCatIds } }
+      ];
     }
     if (category) {
       query.category = category;
@@ -192,7 +233,7 @@ router.get('/slug/:slug', async (req, res) => {
 router.post('/', requireAdmin, async (req, res) => {
   try {
     const {
-      name, slug, category, description, fabric, careInstructions,
+      name, slug, category, subCategory, description, fabric, careInstructions,
       occasionTags, styleTags, price, originalPrice, stock, weightGrams,
       sku, isActive, isFeatured, isBestseller, isNewArrival, images,
       variants, seo
@@ -208,7 +249,7 @@ router.post('/', requireAdmin, async (req, res) => {
     }
 
     const product = await Product.create({
-      name, slug, category, description, fabric, careInstructions,
+      name, slug, category, subCategory, description, fabric, careInstructions,
       occasionTags, styleTags,
       price: Math.round(parseFloat(price) * 100), // convert to paise
       originalPrice: originalPrice ? Math.round(parseFloat(originalPrice) * 100) : undefined, // convert to paise
@@ -256,7 +297,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
     }
 
     const {
-      name, slug, category, description, fabric, careInstructions,
+      name, slug, category, subCategory, description, fabric, careInstructions,
       occasionTags, styleTags, price, originalPrice, stock, weightGrams,
       sku, isActive, isFeatured, isBestseller, isNewArrival, images,
       variants, seo
@@ -269,7 +310,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
 
     // Convert prices to paise
     const updatedData = {
-      name, slug, category, description, fabric, careInstructions,
+      name, slug, category, subCategory, description, fabric, careInstructions,
       occasionTags, styleTags,
       price: Math.round(parseFloat(price) * 100),
       originalPrice: originalPrice ? Math.round(parseFloat(originalPrice) * 100) : undefined,

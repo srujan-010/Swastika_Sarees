@@ -107,9 +107,108 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [activeBanners.length]);
 
+  // Hero Landing slideshow index
+  const [heroSlideIndex, setHeroSlideIndex] = useState(0);
+  const heroImages = settings?.heroLandingImages || [];
+
+  // Auto-advance hero landing image slideshow
+  useEffect(() => {
+    if (settings?.heroLandingMediaType !== 'images' || heroImages.length <= 1) return;
+    const interval = setInterval(() => {
+      setHeroSlideIndex(prev => (prev + 1) % heroImages.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [heroImages.length, settings?.heroLandingMediaType]);
+
   return (
     <div className="relative">
-      
+
+      {/* 0. HERO LANDING SECTION (Vastranand-style split layout) */}
+      {settings?.heroLandingActive !== false && (
+        <section className="relative w-full min-h-[60vh] sm:min-h-[75vh] bg-brand-white overflow-hidden">
+          <div className="flex flex-col md:flex-row min-h-[60vh] sm:min-h-[75vh]">
+            
+            {/* Left: Text Content */}
+            <div className="w-full md:w-1/2 flex items-center justify-center px-6 sm:px-10 lg:px-16 py-12 md:py-0 relative z-10 bg-brand-white">
+              <div className="max-w-lg text-left space-y-5">
+                <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl xl:text-[3.4rem] font-bold leading-tight text-brand-dark italic tracking-tight" style={{ fontStyle: 'italic' }}>
+                  {settings?.heroLandingHeading || 'Craftsmanship You Can Feel In Every Fold!'}
+                </h1>
+                <p className="text-sm sm:text-base text-brand-muted font-sans leading-relaxed">
+                  {settings?.heroLandingSubheading || 'Thoughtfully manufactured for modern Indian women.'}
+                </p>
+                <div className="pt-2">
+                  <Link
+                    to={settings?.heroLandingCtaLink || '/shop'}
+                    className="inline-flex items-center space-x-2 bg-brand-dark hover:bg-brand-crimson text-brand-cream px-7 py-3.5 rounded text-sm font-bold tracking-wider uppercase border border-brand-dark hover:border-brand-crimson shadow-lg hover:shadow-xl transition-all duration-300"
+                  >
+                    <span>{settings?.heroLandingCtaText || 'Shop Now'}</span>
+                    <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Media (Video or Image Slideshow) */}
+            <div className="w-full md:w-1/2 relative min-h-[40vh] md:min-h-full overflow-hidden">
+              {settings?.heroLandingMediaType === 'video' && settings?.heroLandingVideoUrl ? (
+                // Video Mode
+                <video
+                  src={settings.heroLandingVideoUrl}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="absolute inset-0 w-full h-full object-cover grayscale-[30%]"
+                />
+              ) : heroImages.length > 0 ? (
+                // Images Slideshow Mode
+                <>
+                  {heroImages.map((imgUrl, idx) => (
+                    <div
+                      key={idx}
+                      className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+                        heroSlideIndex === idx ? 'opacity-100 z-10' : 'opacity-0 z-0'
+                      }`}
+                    >
+                      <img
+                        src={imgUrl}
+                        alt={`Hero slide ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ))}
+                  {/* Subtle slideshow indicators */}
+                  {heroImages.length > 1 && (
+                    <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 z-20">
+                      {heroImages.map((_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setHeroSlideIndex(i)}
+                          className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                            heroSlideIndex === i ? 'bg-brand-crimson w-5' : 'bg-brand-dark/30'
+                          }`}
+                          aria-label={`Go to hero slide ${i + 1}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                // Fallback placeholder
+                <div className="absolute inset-0 bg-brand-cream flex items-center justify-center">
+                  <img
+                    src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=1200"
+                    alt="Hero landing"
+                    className="w-full h-full object-cover grayscale-[20%]"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* 1. HERO BANNER CAROUSEL */}
       <section className="relative h-[65vh] sm:h-[80vh] w-full overflow-hidden bg-brand-dark">
         {activeBanners.map((slide, index) => (
@@ -230,8 +329,12 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-end mb-8">
             <div className="text-left">
-              <h2 className="font-display text-2xl sm:text-3xl text-brand-dark font-bold">Featured Collection</h2>
-              <span className="text-xs text-brand-gold font-sans font-semibold uppercase tracking-wider">Premium Wardrobe Curations</span>
+              <h2 className="font-display text-2xl sm:text-3xl text-brand-dark font-bold">
+                {settings?.homeFeaturedHeading || 'Featured Collection'}
+              </h2>
+              <span className="text-xs text-brand-gold font-sans font-semibold uppercase tracking-wider">
+                {settings?.homeFeaturedSubheading || 'Premium Wardrobe Curations'}
+              </span>
             </div>
             <Link to="/shop" className="text-xs sm:text-sm font-semibold text-brand-crimson hover:text-brand-gold flex items-center space-x-1">
               <span>View All</span>

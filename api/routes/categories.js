@@ -39,7 +39,7 @@ router.get('/all', requireAdmin, async (req, res) => {
 // POST create category (Admin)
 router.post('/', requireAdmin, async (req, res) => {
   try {
-    const { name, slug, description, imageUrl, displayOrder, isActive } = req.body;
+    const { name, slug, description, imageUrl, displayOrder, isActive, subCategories } = req.body;
     if (!name || !slug) {
       return res.status(400).json({ error: 'Name and slug are required' });
     }
@@ -55,7 +55,8 @@ router.post('/', requireAdmin, async (req, res) => {
       description,
       imageUrl,
       displayOrder: displayOrder || 0,
-      isActive: isActive !== undefined ? isActive : true
+      isActive: isActive !== undefined ? isActive : true,
+      subCategories: subCategories || []
     });
 
     res.status(201).json(category);
@@ -67,7 +68,7 @@ router.post('/', requireAdmin, async (req, res) => {
 // PUT update category (Admin)
 router.put('/:id', requireAdmin, async (req, res) => {
   try {
-    const { name, slug, description, imageUrl, displayOrder, isActive } = req.body;
+    const { name, slug, description, imageUrl, displayOrder, isActive, subCategories } = req.body;
     const catId = req.params.id;
 
     const existing = await Category.findOne({ slug, _id: { $ne: catId } });
@@ -77,7 +78,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
 
     const category = await Category.findByIdAndUpdate(
       catId,
-      { name, slug, description, imageUrl, displayOrder, isActive },
+      { name, slug, description, imageUrl, displayOrder, isActive, subCategories: subCategories || [] },
       { new: true, runValidators: true }
     );
 

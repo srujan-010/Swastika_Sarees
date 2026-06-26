@@ -72,13 +72,20 @@ export const useAuthStore = create((set, get) => ({
           'Authorization': `Bearer ${token}`
         }
       });
-      const data = await response.json();
-      if (response.ok) {
-        set({ user: data });
-        localStorage.setItem('swastika_mock_user', JSON.stringify(data));
-      } else {
-        throw new Error(data.error || 'Failed to fetch user profile');
+      if (!response.ok) {
+        let errorMsg = 'Failed to fetch user profile';
+        try {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errData = await response.json();
+            errorMsg = errData.error || errorMsg;
+          }
+        } catch (_) {}
+        throw new Error(errorMsg);
       }
+      const data = await response.json();
+      set({ user: data });
+      localStorage.setItem('swastika_mock_user', JSON.stringify(data));
     } catch (err) {
       console.error('Error fetching user profile:', err);
     }

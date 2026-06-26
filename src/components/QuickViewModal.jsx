@@ -103,9 +103,11 @@ export default function QuickViewModal({ product, onClose }) {
           />
 
           {product.stock === 0 && (
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-25 flex flex-col items-center justify-center bg-brand-crimson/95 border border-brand-gold/45 text-brand-cream p-4 rounded-full shadow-2xl animate-pulse select-none" style={{ width: "120px", height: "120px" }}>
-              <AlertTriangle size={28} className="text-brand-gold animate-bounce mb-1" />
-              <span className="text-[10px] font-bold tracking-widest text-center uppercase leading-tight">OUT OF<br/>STOCK</span>
+            <div className="absolute inset-0 bg-brand-dark/15 backdrop-blur-2xs flex items-center justify-center select-none pointer-events-none z-20">
+              <div className="flex flex-col items-center justify-center bg-white/90 backdrop-blur-md border border-white/20 text-brand-dark p-4 rounded-full shadow-2xl animate-float-slow" style={{ width: "120px", height: "120px" }}>
+                <AlertTriangle size={28} className="text-brand-dark animate-bounce mb-1" />
+                <span className="text-[10px] font-bold tracking-widest text-center uppercase leading-tight">OUT OF<br/>STOCK</span>
+              </div>
             </div>
           )}
 
@@ -127,7 +129,6 @@ export default function QuickViewModal({ product, onClose }) {
             {product.isNewArrival && <span className="bg-amber-500 text-white text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-sm">NEW</span>}
             {product.isBestseller && <span className="bg-red-800 text-white text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-sm">BESTSELLER</span>}
             {discountPercent > 0 && <span className="bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-sm">{discountPercent}% OFF</span>}
-            {product.stock === 0 && <span className="text-white text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-sm border border-white/30" style={{ background: "rgba(0,0,0,0.6)" }}>OUT OF STOCK</span>}
           </div>
 
           {/* Image dots */}

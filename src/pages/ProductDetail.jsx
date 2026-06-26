@@ -266,9 +266,9 @@ export default function ProductDetail() {
             </div>
 
             {product.stock === 0 && (
-              <div className="absolute inset-0 bg-brand-dark/25 backdrop-blur-2xs flex items-center justify-center select-none pointer-events-none">
-                <div className="flex flex-col items-center justify-center bg-brand-crimson/95 border border-brand-gold/45 text-brand-cream p-5 rounded-full shadow-2xl animate-pulse" style={{ width: "130px", height: "130px" }}>
-                  <AlertTriangle size={32} className="text-brand-gold animate-bounce mb-1" />
+              <div className="absolute inset-0 bg-brand-dark/15 backdrop-blur-2xs flex items-center justify-center select-none pointer-events-none z-10">
+                <div className="flex flex-col items-center justify-center bg-white/90 backdrop-blur-md border border-white/20 text-brand-dark p-5 rounded-full shadow-2xl animate-float-slow" style={{ width: "130px", height: "130px" }}>
+                  <AlertTriangle size={32} className="text-brand-dark animate-bounce mb-1" />
                   <span className="text-[10px] font-bold tracking-widest text-center uppercase leading-tight">OUT OF<br/>STOCK</span>
                 </div>
               </div>

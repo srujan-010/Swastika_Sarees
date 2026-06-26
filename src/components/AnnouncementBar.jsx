@@ -5,13 +5,16 @@ export default function AnnouncementBar() {
 
   useEffect(() => {
     fetch('/api/settings')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+        return res.json();
+      })
       .then(data => setSettings(data))
       .catch(err => console.error('Failed to load settings in announcement bar:', err));
   }, []);
 
   // Return standard marquee if loading or disabled is not explicit
-  const showBar = settings ? settings.isActive !== false : true; 
+  const showBar = settings ? settings.announcementActive !== false : true; 
   const marqueeText = settings?.announcementText || "🚚 Free shipping on orders above ₹999 | Use code SWASTIKA10 for 10% off your first order | Shipping all over India";
 
   if (!showBar) return null;

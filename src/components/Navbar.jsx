@@ -20,25 +20,53 @@ export default function Navbar() {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [categories, setCategories] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [hoveredCatId, setHoveredCatId] = useState(null);
+  const [mobileExpandedCatId, setMobileExpandedCatId] = useState(null);
 
   useEffect(() => {
     fetch('/api/categories')
-      .then(res => res.json())
-      .then(data => setCategories(data.filter(c => c.isActive !== false)))
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        const activeCats = data.filter(c => c.isActive !== false);
+        setCategories(activeCats);
+        if (activeCats.length > 0) {
+          setHoveredCatId(activeCats[0]._id);
+        }
+      })
       .catch(err => console.error('Navbar categories fetch error:', err));
 
     fetch('/api/settings')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+        return res.json();
+      })
       .then(data => setSettings(data))
       .catch(err => console.error('Navbar settings fetch error:', err));
   }, []);
 
-  // Close menus on page navigation
+  // Close menus on page navigation (excluding search drawer if search is active)
   useEffect(() => {
     setMobileMenuOpen(false);
-    setSearchOpen(false);
     setProfileDropdownOpen(false);
-  }, [location]);
+    
+    const params = new URLSearchParams(location.search);
+    if (!params.get('search')) {
+      setSearchOpen(false);
+    }
+  }, [location.pathname]);
+
+  // Sync search input state with the URL search param
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const searchParam = params.get('search') || '';
+    setSearchQuery(searchParam);
+    if (searchParam) {
+      setSearchOpen(true);
+    }
+  }, [location.search]);
 
   // Update cart count and trigger bounce animation
   const totalCartQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -51,12 +79,27 @@ export default function Navbar() {
     }
   }, [totalCartQuantity]);
 
+  const handleSearchChange = (val) => {
+    setSearchQuery(val);
+    const params = new URLSearchParams(location.search);
+    if (val.trim()) {
+      params.set('search', val);
+    } else {
+      params.delete('search');
+    }
+    
+    if (location.pathname === '/shop') {
+      params.delete('page');
+      navigate(`/shop?${params.toString()}`, { replace: true });
+    } else {
+      navigate(`/shop?${params.toString()}`);
+    }
+  };
+
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/shop?search=${encodeURIComponent(searchQuery.trim())}`);
-      setSearchQuery('');
-      setSearchOpen(false);
     }
   };
 
@@ -100,20 +143,101 @@ export default function Navbar() {
               </Link>
               {/* Dropdown Container */}
               <div className="absolute left-0 top-full hidden group-hover:block z-50 pt-2">
-                <div className="w-56 bg-brand-white border border-brand-border rounded-xl shadow-xl py-3 px-1.5 animate-fadeIn">
-                  {categories.length > 0 ? (
-                    categories.map(cat => (
-                      <Link
-                        key={cat._id}
-                        to={`/shop?category=${cat.slug}`}
-                        className="flex items-center px-4 py-2.5 text-xs font-semibold text-brand-dark hover:bg-brand-cream hover:text-brand-crimson rounded-lg transition-colors"
-                      >
-                        {cat.name}
-                      </Link>
-                    ))
-                  ) : (
-                    <span className="block px-4 py-2 text-xs text-brand-muted italic">No categories loaded</span>
-                  )}
+                <div className="flex bg-brand-white border border-brand-border rounded-2xl shadow-2xl overflow-hidden min-w-[560px] max-w-[800px] min-h-[300px] animate-fadeIn">
+                  {/* Left Column: Categories List */}
+                  <div className="w-52 border-r border-brand-border/40 py-4 px-2 bg-brand-cream/5 select-none">
+                    {categories.length > 0 ? (
+                      categories.map((cat) => (
+                        <button
+                          key={cat._id}
+                          onMouseEnter={() => setHoveredCatId(cat._id)}
+                          onClick={() => {
+                            navigate(`/shop?category=${cat.slug}`);
+                          }}
+                          className={`w-full text-left flex items-center justify-between px-4 py-3 text-xs font-bold rounded-lg transition-colors duration-250 ${
+                            hoveredCatId === cat._id
+                              ? 'bg-brand-cream text-brand-crimson'
+                              : 'text-brand-dark hover:bg-brand-cream/45 hover:text-brand-crimson'
+                          }`}
+                        >
+                          <span>{cat.name}</span>
+                          <span className="text-[10px] text-brand-muted">→</span>
+                        </button>
+                      ))
+                    ) : (
+                      <span className="block px-4 py-2 text-xs text-brand-muted italic">No categories loaded</span>
+                    )}
+                  </div>
+                  
+                  {/* Right Column: Sub-categories Visual Group */}
+                  <div className="flex-1 p-6 bg-brand-white">
+                    {(() => {
+                      const activeCat = categories.find(c => c._id === hoveredCatId) || categories[0];
+                      if (!activeCat) return <div className="text-brand-muted text-xs italic">Select a category...</div>;
+                      
+                      const subs = activeCat.subCategories || [];
+                      return (
+                        <div className="space-y-4">
+                          <div className="border-b border-brand-border/60 pb-2 flex justify-between items-center select-none">
+                            <span className="font-display font-bold text-brand-dark text-xs uppercase tracking-wider">{activeCat.name} Collection</span>
+                            <Link to={`/shop?category=${activeCat.slug}`} className="text-brand-crimson hover:text-brand-gold text-[10px] font-bold uppercase transition-colors">View All →</Link>
+                          </div>
+                          
+                          {subs.length > 0 ? (
+                            <div className="grid grid-cols-3 gap-6">
+                              {subs.map((sub, i) => (
+                                <Link
+                                  key={i}
+                                  to={`/shop?category=${activeCat.slug}&subcategory=${sub.slug}`}
+                                  className="flex flex-col items-center group text-center"
+                                >
+                                  {/* Custom Gold Ethnic Framed Circle Image */}
+                                  <div className="relative w-20 h-20 flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                                    {/* Gold Ethnic Mandala SVG Overlay */}
+                                    <svg className="absolute inset-0 w-full h-full text-brand-gold/60 group-hover:text-brand-gold transition-colors duration-300" viewBox="0 0 100 100" fill="none">
+                                      <circle cx="50" cy="50" r="44" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+                                      <circle cx="50" cy="50" r="40" stroke="currentColor" strokeWidth="0.75" />
+                                      {[...Array(16)].map((_, idx) => {
+                                        const angle = (idx * 360) / 16;
+                                        return (
+                                          <circle
+                                            key={idx}
+                                            cx={50 + 40 * Math.cos((angle * Math.PI) / 180)}
+                                            cy={50 + 40 * Math.sin((angle * Math.PI) / 180)}
+                                            r="2"
+                                            fill="currentColor"
+                                          />
+                                        );
+                                      })}
+                                    </svg>
+                                    
+                                    {/* Circular Subcategory Image */}
+                                    <div className="w-14 h-14 rounded-full overflow-hidden z-10 border border-brand-border bg-brand-cream">
+                                      <img
+                                        src={sub.imageUrl || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=150'}
+                                        alt={sub.name}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Label text */}
+                                  <span className="mt-2 text-[10px] font-bold text-brand-dark uppercase tracking-widest group-hover:text-brand-crimson transition-colors leading-tight truncate w-full px-1">
+                                    {sub.name}
+                                  </span>
+                                </Link>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center h-44 border border-dashed border-brand-border/60 rounded-xl select-none">
+                              <span className="text-3xs text-brand-muted italic">Shop full range of {activeCat.name} directly. No separate sub-categories listed.</span>
+                              <Link to={`/shop?category=${activeCat.slug}`} className="mt-2 text-2xs font-bold text-brand-crimson bg-brand-cream hover:bg-brand-crimson hover:text-brand-cream border px-3 py-1.5 rounded transition-all duration-300">Browse collection</Link>
+                            </div>
+                          )}
+                        </div>
+                       );
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>
@@ -254,7 +378,7 @@ export default function Navbar() {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder="Search premium sarees, kurtis, dress materials... (e.g. Silk wedding saree)"
                 className="w-full bg-brand-cream text-brand-dark border border-brand-border rounded-full py-3 pl-12 pr-10 focus:outline-none focus:ring-1 focus:ring-brand-gold focus:border-brand-gold font-sans text-sm"
                 autoFocus
@@ -262,7 +386,17 @@ export default function Navbar() {
               <Search className="absolute left-4 top-3.5 text-brand-muted" size={18} />
               <button
                 type="button"
-                onClick={() => setSearchOpen(false)}
+                onClick={() => {
+                  setSearchOpen(false);
+                  setSearchQuery('');
+                  const params = new URLSearchParams(location.search);
+                  params.delete('search');
+                  if (location.pathname === '/shop') {
+                    navigate(`/shop?${params.toString()}`, { replace: true });
+                  } else {
+                    navigate(location.pathname);
+                  }
+                }}
                 className="absolute right-4 top-3.5 text-brand-muted hover:text-brand-crimson"
               >
                 <X size={18} />
@@ -295,21 +429,95 @@ export default function Navbar() {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder="Search..."
                 className="w-full bg-brand-cream border border-brand-border rounded-md py-2 pl-10 pr-4 focus:outline-none focus:ring-1 focus:ring-brand-crimson focus:border-brand-crimson text-sm"
               />
               <Search className="absolute left-3 top-2.5 text-brand-muted" size={16} />
             </form>
 
-            <nav className="flex flex-col space-y-4 text-base font-medium">
-              <Link to="/" className="text-brand-dark hover:text-brand-crimson py-1">Home</Link>
-              <Link to="/shop" className="text-brand-dark hover:text-brand-crimson py-1">Shop Catalog</Link>
-              <Link to="/shop?new=true" className="text-brand-dark hover:text-brand-crimson py-1">New Arrivals</Link>
-              <Link to="/shop?sale=true" className="text-brand-crimson font-semibold py-1">Sale Offers</Link>
-              <Link to="/about" className="text-brand-dark hover:text-brand-crimson py-1">About Us</Link>
-              <Link to="/contact" className="text-brand-dark hover:text-brand-crimson py-1">Contact</Link>
-              <Link to="/track-order" className="text-brand-gold hover:text-brand-crimson py-1 font-semibold">Track Guest Order</Link>
+            <nav className="flex flex-col space-y-1 text-sm font-medium overflow-y-auto max-h-[70vh] text-left">
+              <Link to="/" onClick={() => setMobileMenuOpen(false)} className="text-brand-dark hover:text-brand-crimson py-2.5 border-b border-brand-border/40 text-left font-semibold">Home</Link>
+              <Link to="/shop?new=true" onClick={() => setMobileMenuOpen(false)} className="text-brand-dark hover:text-brand-crimson py-2.5 border-b border-brand-border/40 text-left font-semibold">New Arrivals</Link>
+              <Link to="/shop?sale=true" onClick={() => setMobileMenuOpen(false)} className="text-brand-crimson py-2.5 border-b border-brand-border/40 text-left font-bold">Sale Offers</Link>
+              
+              {/* Dynamic mobile category list with subcategories accordion */}
+              {categories.map(cat => {
+                const hasSubs = cat.subCategories && cat.subCategories.length > 0;
+                const isExpanded = mobileExpandedCatId === cat._id;
+                return (
+                  <div key={cat._id} className="border-b border-brand-border/40 py-0.5 flex flex-col">
+                    <div className="flex justify-between items-center w-full">
+                      <Link
+                        to={`/shop?category=${cat.slug}`}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="text-brand-dark hover:text-brand-crimson py-2.5 text-left font-semibold flex-grow"
+                      >
+                        {cat.name}
+                      </Link>
+                      {hasSubs && (
+                        <button
+                          type="button"
+                          onClick={() => setMobileExpandedCatId(prev => prev === cat._id ? null : cat._id)}
+                          className="p-2 text-brand-muted hover:text-brand-crimson font-bold text-sm select-none"
+                        >
+                          {isExpanded ? '−' : '+'}
+                        </button>
+                      )}
+                    </div>
+                    
+                    {/* Collapsible Subcategory Row Grid */}
+                    {hasSubs && isExpanded && (
+                      <div className="bg-brand-cream/15 p-2.5 rounded-xl border border-brand-border/40 my-1 animate-fadeIn">
+                        <div className="flex gap-3.5 overflow-x-auto py-1 scrollbar-none select-none">
+                          {cat.subCategories.map((sub, sIdx) => (
+                            <Link
+                              key={sIdx}
+                              to={`/shop?category=${cat.slug}&subcategory=${sub.slug}`}
+                              onClick={() => setMobileMenuOpen(false)}
+                              className="flex flex-col items-center text-center shrink-0 w-16"
+                            >
+                              <div className="relative w-12 h-12 flex items-center justify-center">
+                                {/* Mobile Gold Frame SVG */}
+                                <svg className="absolute inset-0 w-full h-full text-brand-gold" viewBox="0 0 100 100" fill="none">
+                                  <circle cx="50" cy="50" r="44" stroke="currentColor" strokeWidth="1.25" strokeDasharray="3 3" />
+                                  <circle cx="50" cy="50" r="40" stroke="currentColor" strokeWidth="0.75" />
+                                  {[...Array(12)].map((_, idx) => {
+                                    const angle = (idx * 360) / 12;
+                                    return (
+                                      <circle
+                                        key={idx}
+                                        cx={50 + 40 * Math.cos((angle * Math.PI) / 180)}
+                                        cy={50 + 40 * Math.sin((angle * Math.PI) / 180)}
+                                        r="2.5"
+                                        fill="currentColor"
+                                      />
+                                    );
+                                  })}
+                                </svg>
+                                <div className="w-8 h-8 rounded-full overflow-hidden z-10 border border-brand-border bg-brand-cream">
+                                  <img
+                                    src={sub.imageUrl || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=150'}
+                                    className="w-full h-full object-cover"
+                                    alt=""
+                                  />
+                                </div>
+                              </div>
+                              <span className="mt-1 text-[8px] font-bold text-brand-dark uppercase tracking-wider truncate w-full px-0.5 leading-none">
+                                {sub.name}
+                              </span>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              <Link to="/about" onClick={() => setMobileMenuOpen(false)} className="text-brand-dark hover:text-brand-crimson py-2.5 border-b border-brand-border/40 text-left font-semibold">About Us</Link>
+              <Link to="/contact" onClick={() => setMobileMenuOpen(false)} className="text-brand-dark hover:text-brand-crimson py-2.5 border-b border-brand-border/40 text-left font-semibold">Contact</Link>
+              <Link to="/track-order" onClick={() => setMobileMenuOpen(false)} className="text-brand-gold hover:text-brand-crimson py-2.5 border-b border-brand-border/40 text-left font-bold">Track Guest Order</Link>
             </nav>
 
             <div className="mt-auto border-t border-brand-border/60 pt-6">

@@ -17,10 +17,22 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB max
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed'), false);
+      cb(new Error('Only image and video files are allowed'), false);
+    }
+  }
+});
+
+const videoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB max for video
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('video/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only video files are allowed'), false);
     }
   }
 });
@@ -98,6 +110,42 @@ router.post('/multiple', requireAuth, upload.array('images', 20), async (req, re
   } catch (error) {
     console.error('Cloudinary multi-upload error:', error);
     res.status(500).json({ error: error.message || 'Upload failed' });
+  }
+});
+
+// POST /api/upload/video — upload a single video to Cloudinary
+router.post('/video', requireAuth, videoUpload.single('video'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No video file provided' });
+  }
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'swastika_sarees/videos',
+          resource_type: 'video',
+          chunk_size: 6000000,
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      uploadStream.end(req.file.buffer);
+    });
+
+    res.json({
+      url: result.secure_url,
+      public_id: result.public_id,
+      duration: result.duration,
+      format: result.format,
+      width: result.width,
+      height: result.height,
+    });
+  } catch (error) {
+    console.error('Cloudinary video upload error:', error);
+    res.status(500).json({ error: error.message || 'Video upload failed' });
   }
 });
 

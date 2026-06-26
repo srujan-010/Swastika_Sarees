@@ -31,7 +31,12 @@ const CategorySchema = new Schema({
   description: { type: String },
   imageUrl: { type: String },
   displayOrder: { type: Number, default: 0 },
-  isActive: { type: Boolean, default: true }
+  isActive: { type: Boolean, default: true },
+  subCategories: [{
+    name: { type: String, required: true },
+    slug: { type: String, required: true },
+    imageUrl: { type: String }
+  }]
 }, { timestamps: true });
 
 // 4. Variant Schema (Nested inside Product)
@@ -56,6 +61,7 @@ const ProductSchema = new Schema({
   name: { type: String, required: true },
   slug: { type: String, required: true, unique: true },
   category: { type: Schema.Types.ObjectId, ref: 'Category', required: true },
+  subCategory: { type: String },
   description: { type: String },
   fabric: { type: String },
   careInstructions: { type: String },
@@ -213,7 +219,20 @@ const SettingSchema = new Schema({
   homePromoDescription: { type: String, default: 'Unsure of fabric weight, shade match, or sizes? Skip the queue and consult directly with our catalog experts on WhatsApp for product videos, customized sizing checkups, and COD booking services.' },
   homePromoImage1: { type: String, default: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=350' },
   homePromoImage2: { type: String, default: 'https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?auto=format&fit=crop&q=80&w=350' },
-  homePromoImage3: { type: String, default: 'https://images.unsplash.com/photo-1608748010899-18f300247112?auto=format&fit=crop&q=80&w=350' }
+  homePromoImage3: { type: String, default: 'https://images.unsplash.com/photo-1608748010899-18f300247112?auto=format&fit=crop&q=80&w=350' },
+  announcementText: { type: String, default: '🚚 Free shipping on orders above ₹999 | Use code SWASTIKA10 for 10% off your first order | Shipping all over India' },
+  announcementActive: { type: Boolean, default: true },
+  homeFeaturedHeading: { type: String, default: 'Featured Collection' },
+  homeFeaturedSubheading: { type: String, default: 'Premium Wardrobe Curations' },
+  homeFeaturedCategory: { type: String, default: '' },
+  heroLandingActive: { type: Boolean, default: true },
+  heroLandingHeading: { type: String, default: 'Craftsmanship You Can Feel In Every Fold!' },
+  heroLandingSubheading: { type: String, default: 'Thoughtfully manufactured for modern Indian women.' },
+  heroLandingCtaText: { type: String, default: 'Shop Now' },
+  heroLandingCtaLink: { type: String, default: '/shop' },
+  heroLandingMediaType: { type: String, enum: ['video', 'images'], default: 'images' },
+  heroLandingVideoUrl: { type: String, default: '' },
+  heroLandingImages: [{ type: String }]
 }, { timestamps: true });
 
 // Prevent model overwrite compiled errors on hot-reloading
