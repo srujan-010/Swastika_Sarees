@@ -4,6 +4,34 @@ import { requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// --- Image Normalization Utility ---
+const sortImages = (images) => {
+  if (!images || !Array.isArray(images)) return images;
+  return [...images].sort((a, b) => {
+    if (a.isPrimary && !b.isPrimary) return -1;
+    if (!a.isPrimary && b.isPrimary) return 1;
+    const orderA = a.displayOrder !== undefined ? a.displayOrder : 9999;
+    const orderB = b.displayOrder !== undefined ? b.displayOrder : 9999;
+    return orderA - orderB;
+  });
+};
+
+const normalizeProductImages = (product) => {
+  if (!product) return product;
+  const p = product.toObject ? product.toObject() : product;
+  
+  if (p.images) p.images = sortImages(p.images);
+  if (p.mainProduct?.images) p.mainProduct.images = sortImages(p.mainProduct.images);
+  
+  if (p.variants && Array.isArray(p.variants)) {
+    p.variants = p.variants.map(v => ({
+      ...v,
+      images: sortImages(v.images)
+    }));
+  }
+  return p;
+};
+
 // GET featured, bestseller, new arrival collections (Storefront homepage)
 router.get('/collections', async (req, res) => {
   try {
@@ -18,7 +46,11 @@ router.get('/collections', async (req, res) => {
     const featured = await Product.find(featuredQuery).populate('category').limit(8);
     const bestsellers = await Product.find({ isActive: true, isBestseller: true }).populate('category').limit(8);
     const newArrivals = await Product.find({ isActive: true, isNewArrival: true }).populate('category').limit(8);
-    res.json({ featured, bestsellers, newArrivals });
+    res.json({ 
+      featured: featured.map(normalizeProductImages), 
+      bestsellers: bestsellers.map(normalizeProductImages), 
+      newArrivals: newArrivals.map(normalizeProductImages) 
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -28,29 +60,16 @@ router.get('/collections', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const {
-      category, // category slug
-      subcategory, // subcategory slug
-      minPrice, // in INR
-      maxPrice, // in INR
-      fabric, // comma separated
-      color, // comma separated
-      size, // comma separated
-      rating, // 3, 4 etc (minimum rating)
-      inStock, // true/false
-      discount, // 10, 25, 50 (minimum discount)
-      sort,
-      search,
-      page = 1,
-      limit = 12
+      category, subcategory, minPrice, maxPrice, fabric, color, size, rating, inStock, discount, sort, search, page = 1, limit = 12
     } = req.query;
 
     const query = { isActive: true };
+    const andClauses = [];
 
     if (subcategory) {
       query.subCategory = subcategory;
     }
 
-    // 1. Category filter
     if (category) {
       const catArray = category.split(',');
       const categories = await Category.find({ slug: { $in: catArray } });
@@ -58,42 +77,41 @@ router.get('/', async (req, res) => {
       query.category = { $in: catIds };
     }
 
-    // 2. Price filter (converting from INR to paise)
     if (minPrice || maxPrice) {
       query.price = {};
       if (minPrice) query.price.$gte = parseFloat(minPrice) * 100;
       if (maxPrice) query.price.$lte = parseFloat(maxPrice) * 100;
     }
 
-    // 3. Fabric filter
     if (fabric) {
       const fabricArray = fabric.split(',').map(f => new RegExp(f.trim(), 'i'));
       query.fabric = { $in: fabricArray };
     }
 
-    // 4. Color filter (checked against variants.colorName or variants.colorHex)
     if (color) {
       const colorArray = color.split(',').map(c => new RegExp(c.trim(), 'i'));
-      query['variants.colorName'] = { $in: colorArray };
+      andClauses.push({
+        $or: [
+          { 'variants.colorName': { $in: colorArray } },
+          { 'mainProduct.primaryColor.name': { $in: colorArray } },
+          { 'colorName': { $in: colorArray } }
+        ]
+      });
     }
 
-    // 5. Size filter
     if (size) {
       const sizeArray = size.split(',');
       query['variants.size'] = { $in: sizeArray };
     }
 
-    // 6. Rating filter
     if (rating) {
       query['ratings.average'] = { $gte: parseFloat(rating) };
     }
 
-    // 7. Stock filter
     if (inStock === 'true') {
       query.stock = { $gt: 0 };
     }
 
-    // 8. Discount filter (originalPrice - price) / originalPrice >= discount%
     if (discount) {
       const minDiscountRatio = parseFloat(discount) / 100;
       query.$expr = {
@@ -107,36 +125,33 @@ router.get('/', async (req, res) => {
       };
     }
 
-    // 9. Search filter (improved regex search across name, description, fabric, tags, and category)
     if (search) {
       const escapedSearch = search.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
       const searchRegex = new RegExp(escapedSearch, 'i');
-      
-      // Find matching categories to support searching by category name
       const matchingCategories = await Category.find({ name: searchRegex });
       const matchingCatIds = matchingCategories.map(c => c._id);
 
-      query.$or = [
-        { name: searchRegex },
-        { description: searchRegex },
-        { fabric: searchRegex },
-        { occasionTags: searchRegex },
-        { styleTags: searchRegex },
-        { category: { $in: matchingCatIds } }
-      ];
+      andClauses.push({
+        $or: [
+          { name: searchRegex },
+          { description: searchRegex },
+          { fabric: searchRegex },
+          { occasionTags: searchRegex },
+          { styleTags: searchRegex },
+          { category: { $in: matchingCatIds } }
+        ]
+      });
     }
 
-    // Sort configurations
-    let sortObj = { createdAt: -1 }; // default newest
-    if (sort === 'price_asc') {
-      sortObj = { price: 1 };
-    } else if (sort === 'price_desc') {
-      sortObj = { price: -1 };
-    } else if (sort === 'rating') {
-      sortObj = { 'ratings.average': -1 };
-    } else if (sort === 'popular') {
-      sortObj = { 'ratings.count': -1 };
+    if (andClauses.length > 0) {
+      query.$and = andClauses;
     }
+
+    let sortObj = { createdAt: -1 };
+    if (sort === 'price_asc') sortObj = { price: 1 };
+    else if (sort === 'price_desc') sortObj = { price: -1 };
+    else if (sort === 'rating') sortObj = { 'ratings.average': -1 };
+    else if (sort === 'popular') sortObj = { 'ratings.count': -1 };
 
     const skipCount = (parseInt(page) - 1) * parseInt(limit);
     const total = await Product.countDocuments(query);
@@ -151,7 +166,155 @@ router.get('/', async (req, res) => {
       page: parseInt(page),
       limit: parseInt(limit),
       totalPages: Math.ceil(total / parseInt(limit)),
-      products
+      products: products.map(normalizeProductImages)
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET available filters based on current search context
+router.get('/filters', async (req, res) => {
+  try {
+    const {
+      category, subcategory, minPrice, maxPrice, fabric, color, size, rating, inStock, discount, search
+    } = req.query;
+
+    const buildQuery = async (excludeDimension = null) => {
+      const query = { isActive: true };
+      const andClauses = [];
+
+      if (subcategory && excludeDimension !== 'subcategory') {
+        query.subCategory = subcategory;
+      }
+
+      if (category && excludeDimension !== 'category') {
+        const catArray = category.split(',');
+        const categories = await Category.find({ slug: { $in: catArray } });
+        const catIds = categories.map(c => c._id);
+        query.category = { $in: catIds };
+      }
+
+      if ((minPrice || maxPrice) && excludeDimension !== 'price') {
+        query.price = {};
+        if (minPrice) query.price.$gte = parseFloat(minPrice) * 100;
+        if (maxPrice) query.price.$lte = parseFloat(maxPrice) * 100;
+      }
+
+      if (fabric && excludeDimension !== 'fabric') {
+        const fabricArray = fabric.split(',').map(f => new RegExp(f.trim(), 'i'));
+        query.fabric = { $in: fabricArray };
+      }
+
+      if (color && excludeDimension !== 'color') {
+        const colorArray = color.split(',').map(c => new RegExp(c.trim(), 'i'));
+        andClauses.push({
+          $or: [
+            { 'variants.colorName': { $in: colorArray } },
+            { 'mainProduct.primaryColor.name': { $in: colorArray } },
+            { 'colorName': { $in: colorArray } }
+          ]
+        });
+      }
+
+      if (size && excludeDimension !== 'size') {
+        const sizeArray = size.split(',');
+        query['variants.size'] = { $in: sizeArray };
+      }
+
+      if (rating && excludeDimension !== 'rating') {
+        query['ratings.average'] = { $gte: parseFloat(rating) };
+      }
+
+      if (inStock === 'true' && excludeDimension !== 'inStock') {
+        query.stock = { $gt: 0 };
+      }
+
+      if (discount && excludeDimension !== 'discount') {
+        const minDiscountRatio = parseFloat(discount) / 100;
+        query.$expr = {
+          $and: [
+            { $gt: ['$originalPrice', 0] },
+            { $gte: [
+              { $divide: [{ $subtract: ['$originalPrice', '$price'] }, '$originalPrice'] },
+              minDiscountRatio
+            ]}
+          ]
+        };
+      }
+
+      if (search && excludeDimension !== 'search') {
+        const escapedSearch = search.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+        const searchRegex = new RegExp(escapedSearch, 'i');
+        const matchingCategories = await Category.find({ name: searchRegex });
+        const matchingCatIds = matchingCategories.map(c => c._id);
+
+        andClauses.push({
+          $or: [
+            { name: searchRegex },
+            { description: searchRegex },
+            { fabric: searchRegex },
+            { occasionTags: searchRegex },
+            { styleTags: searchRegex },
+            { category: { $in: matchingCatIds } }
+          ]
+        });
+      }
+
+      if (andClauses.length > 0) {
+        query.$and = andClauses;
+      }
+
+      return query;
+    };
+
+    const categoryQuery = await buildQuery('category');
+    const categoryIds = await Product.distinct('category', categoryQuery);
+    const availableCategories = await Category.find({ _id: { $in: categoryIds } });
+
+    const subcatQuery = await buildQuery('subcategory');
+    const availableTypes = await Product.distinct('subCategory', subcatQuery);
+
+    const fabricQuery = await buildQuery('fabric');
+    const availableFabrics = await Product.distinct('fabric', fabricQuery);
+
+    const sizeQuery = await buildQuery('size');
+    const availableSizes = await Product.distinct('variants.size', sizeQuery);
+
+    const colorQuery = await buildQuery('color');
+    const colorAgg = await Product.aggregate([
+      { $match: colorQuery },
+      {
+        $project: {
+          colors: {
+            $concatArrays: [
+              [{ name: "$mainProduct.primaryColor.name", hex: "$mainProduct.primaryColor.hex" }],
+              [{ name: "$colorName", hex: "$colorHex" }],
+              { $ifNull: [ { $map: { input: "$variants", as: "v", in: { name: "$$v.colorName", hex: "$$v.colorHex" } } }, [] ] }
+            ]
+          }
+        }
+      },
+      { $unwind: "$colors" },
+      { $match: { "colors.name": { $nin: [null, ""] } } },
+      {
+        $group: {
+          _id: { $toLower: "$colors.name" },
+          name: { $first: "$colors.name" },
+          hex: { $first: "$colors.hex" }
+        }
+      },
+      { $project: { _id: 0, name: 1, hex: 1 } }
+    ]);
+
+    const availableColors = colorAgg.filter(c => c.name);
+
+    res.json({
+      categories: availableCategories,
+      types: availableTypes.filter(Boolean),
+      fabrics: availableFabrics.filter(Boolean),
+      sizes: availableSizes.filter(Boolean),
+      colors: availableColors
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -209,7 +372,7 @@ router.get('/all', requireAdmin, async (req, res) => {
 
     res.json({
       total,
-      products
+      products: products.map(normalizeProductImages)
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -223,20 +386,24 @@ router.get('/slug/:slug', async (req, res) => {
     if (!product) {
       return res.status(404).json({ error: 'Product not found' });
     }
-    res.json(product);
+    res.json(normalizeProductImages(product));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// POST create product (Admin)
+// POST a new product (Admin)
 router.post('/', requireAdmin, async (req, res) => {
   try {
+    console.log('[DEBUG] POST /api/products req.body:', JSON.stringify(req.body, null, 2));
+    
     const {
-      name, slug, category, subCategory, description, fabric, careInstructions,
+      name, slug, category, subCategory, brand, description, fabric, careInstructions,
       occasionTags, styleTags, price, originalPrice, stock, weightGrams,
       sku, isActive, isFeatured, isBestseller, isNewArrival, images,
-      variants, seo
+      variants, seo, productVideo, productHighlights, sareeLength, sareeWidth,
+      sareeWeight, blousePiece, blouseType, latkan, availability, dispatchTime,
+      colorName, colorHex, mainProduct
     } = req.body;
 
     if (!name || !slug || !category || !price) {
@@ -248,11 +415,22 @@ router.post('/', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Product slug already exists' });
     }
 
-    const product = await Product.create({
+    if (variants && variants.length > 0) {
+      for (const v of variants) {
+        if (!v.colorName) {
+          return res.status(400).json({ error: 'All variants must have a Color Name specified.' });
+        }
+        if (v.availability === "") {
+          delete v.availability;
+        }
+      }
+    }
+
+    const productData = {
       name, slug, category, subCategory, description, fabric, careInstructions,
       occasionTags, styleTags,
-      price: Math.round(parseFloat(price) * 100), // convert to paise
-      originalPrice: originalPrice ? Math.round(parseFloat(originalPrice) * 100) : undefined, // convert to paise
+      price: Math.round(parseFloat(price) * 100),
+      originalPrice: originalPrice ? Math.round(parseFloat(originalPrice) * 100) : undefined,
       stock: stock || 0,
       weightGrams: weightGrams || 500,
       sku,
@@ -260,10 +438,26 @@ router.post('/', requireAdmin, async (req, res) => {
       isFeatured: isFeatured || false,
       isBestseller: isBestseller || false,
       isNewArrival: isNewArrival || false,
-      images: images || [],
+      images: images || [], // Legacy fallback
+      mainProduct: mainProduct || {
+        primaryColor: { name: colorName || '', hex: colorHex || '' },
+        images: images || [],
+        primaryImage: images?.[0]?.url || '',
+        video: productVideo || ''
+      },
       variants: variants || [],
-      seo: seo || { metaTitle: name, metaDescription: description?.replace(/<[^>]*>/g, '').substring(0, 160) }
-    });
+      seo: seo || { metaTitle: name, metaDescription: description?.replace(/<[^>]*>/g, '').substring(0, 160) },
+      brand, productVideo, productHighlights, sareeLength, sareeWidth, sareeWeight, blousePiece, blouseType, latkan, dispatchTime,
+      colorName, colorHex
+    };
+
+    if (availability !== "") {
+      productData.availability = availability;
+    }
+
+    const product = await Product.create(productData);
+
+    console.log('[DEBUG] POST /api/products savedProduct:', JSON.stringify(product, null, 2));
 
     res.status(201).json(product);
   } catch (error) {
@@ -275,37 +469,42 @@ router.post('/', requireAdmin, async (req, res) => {
 router.put('/:id', requireAdmin, async (req, res) => {
   try {
     const prodId = req.params.id;
-    console.log('[PUT /products/:id] body keys:', Object.keys(req.body));
-    console.log('[PUT /products/:id] isQuickUpdate:', req.body.isQuickUpdate);
-
-    // Check if this is a quick status update
-    if (req.body.isQuickUpdate === true) {
-      const { isActive, stock } = req.body;
-      console.log('[Quick Update] isActive:', isActive, 'stock:', stock);
-
-      const product = await Product.findByIdAndUpdate(
+    console.log(`[DEBUG] PUT /api/products/${prodId} req.body:`, JSON.stringify(req.body, null, 2));
+    
+    // Quick stock/status update
+    if (req.body.isQuickUpdate) {
+      const updated = await Product.findByIdAndUpdate(
         prodId,
-        { $set: { isActive: Boolean(isActive), stock: Number(stock) } },
-        { new: true, runValidators: false }
-      ).populate('category');
-
-      if (!product) {
-        return res.status(404).json({ error: 'Product not found' });
-      }
-      console.log('[Quick Update] Success. isActive now:', product.isActive, 'stock:', product.stock);
-      return res.json(product);
+        { isActive: req.body.isActive, stock: req.body.stock },
+        { new: true }
+      );
+      return res.json(normalizeProductImages(updated));
     }
 
     const {
-      name, slug, category, subCategory, description, fabric, careInstructions,
+      name, slug, category, subCategory, brand, description, fabric, careInstructions,
       occasionTags, styleTags, price, originalPrice, stock, weightGrams,
       sku, isActive, isFeatured, isBestseller, isNewArrival, images,
-      variants, seo
+      variants, seo, productVideo, productHighlights, sareeLength, sareeWidth,
+      sareeWeight, blousePiece, blouseType, latkan, availability, dispatchTime,
+      colorName, colorHex, mainProduct
     } = req.body;
 
     const existing = await Product.findOne({ slug, _id: { $ne: prodId } });
     if (existing) {
       return res.status(400).json({ error: 'Product slug already exists' });
+    }
+
+    if (variants && variants.length > 0) {
+      for (const v of variants) {
+        if (!v.colorName) {
+          return res.status(400).json({ error: 'All variants must have a Color Name specified.' });
+        }
+        // Remove empty enum values to prevent Mongoose validation errors
+        if (v.availability === "") {
+          delete v.availability;
+        }
+      }
     }
 
     // Convert prices to paise
@@ -322,9 +521,21 @@ router.put('/:id', requireAdmin, async (req, res) => {
       isBestseller: isBestseller || false,
       isNewArrival: isNewArrival || false,
       images: images || [],
+      mainProduct: mainProduct || {
+        primaryColor: { name: colorName || '', hex: colorHex || '' },
+        images: images || [],
+        primaryImage: images?.[0]?.url || '',
+        video: productVideo || ''
+      },
       variants: variants || [],
-      seo: seo || { metaTitle: name, metaDescription: description?.replace(/<[^>]*>/g, '').substring(0, 160) }
+      seo: seo || { metaTitle: name, metaDescription: description?.replace(/<[^>]*>/g, '').substring(0, 160) },
+      brand, productVideo, productHighlights, sareeLength, sareeWidth, sareeWeight, blousePiece, blouseType, latkan, dispatchTime,
+      colorName, colorHex
     };
+
+    if (availability !== "") {
+      updatedData.availability = availability;
+    }
 
     const product = await Product.findByIdAndUpdate(prodId, updatedData, { new: true, runValidators: true }).populate('category');
 
@@ -332,9 +543,10 @@ router.put('/:id', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Product not found' });
     }
 
-    res.json(product);
+    console.log(`[DEBUG] PUT /api/products/${prodId} updatedProduct:`, JSON.stringify(product, null, 2));
+
+    res.json(normalizeProductImages(product));
   } catch (error) {
-    console.error('[PUT /products/:id] Error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });

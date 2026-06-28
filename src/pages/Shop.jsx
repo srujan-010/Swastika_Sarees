@@ -6,27 +6,14 @@ import QuickViewModal from '../components/QuickViewModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { staggerContainer, fadeInUp, scaleUp } from '../utils/animations';
 
-const FABRICS = ['Silk', 'Cotton', 'Chiffon', 'Georgette', 'Net', 'Linen', 'Organza', 'Crepe'];
-const SIZES = ['Free Size', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
-const COLORS = [
-  { name: 'Red', hex: '#E53E3E' },
-  { name: 'Gold', hex: '#D69E2E' },
-  { name: 'Blue', hex: '#3182CE' },
-  { name: 'Green', hex: '#38A169' },
-  { name: 'Pink', hex: '#ED64A6' },
-  { name: 'Purple', hex: '#805AD5' },
-  { name: 'Cream', hex: '#FFF8F0' },
-  { name: 'Yellow', hex: '#ECC94B' },
-  { name: 'Orange', hex: '#DD6B20' },
-  { name: 'Black', hex: '#1A202C' }
-];
-
 export default function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
   
   // Data State
   const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [availableFilters, setAvailableFilters] = useState({
+    categories: [], types: [], fabrics: [], colors: [], sizes: []
+  });
   const [loading, setLoading] = useState(true);
   const [totalProducts, setTotalProducts] = useState(0);
   const [page, setPage] = useState(1);
@@ -39,6 +26,7 @@ export default function Shop() {
 
   // Derive filter values directly from searchParams on every render
   const selectedCats = searchParams.get('category') ? searchParams.get('category').split(',') : [];
+  const selectedSubcat = searchParams.get('subcategory') ? searchParams.get('subcategory').split(',') : [];
   const selectedFabrics = searchParams.get('fabric') ? searchParams.get('fabric').split(',') : [];
   const selectedSizes = searchParams.get('size') ? searchParams.get('size').split(',') : [];
   const selectedColors = searchParams.get('color') ? searchParams.get('color').split(',') : [];
@@ -49,20 +37,6 @@ export default function Shop() {
 
   // We keep local state for price inputs so typing is smooth, but we sync them when URL changes
   const [priceRange, setPriceRange] = useState({ min: '', max: '' });
-
-  // Load initial settings & categories
-  useEffect(() => {
-    fetch('/api/categories')
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then(data => setCategories(data))
-      .catch(err => {
-        console.error('Failed to load categories', err);
-        setCategories([]);
-      });
-  }, []);
 
   // Sync price inputs and reset page when URL searchParams change
   useEffect(() => {
@@ -135,9 +109,36 @@ export default function Shop() {
     }
   };
 
+  // Fetch available dynamic filters
+  const fetchFilters = async () => {
+    try {
+      const queryParams = new URLSearchParams(searchParams);
+      queryParams.delete('page');
+      queryParams.delete('limit');
+      
+      const response = await fetch(`/api/products/filters?${queryParams.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableFilters({
+          categories: data.categories || [],
+          types: data.types || [],
+          fabrics: data.fabrics || [],
+          colors: data.colors || [],
+          sizes: data.sizes || []
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load dynamic filters:', error);
+    }
+  };
+
   useEffect(() => {
     fetchProducts(page, page > 1);
   }, [searchParams, page]);
+
+  useEffect(() => {
+    fetchFilters();
+  }, [searchParams]);
 
   // Update URL search parameters when filters are toggled
   const applyFiltersToUrl = (newFilters) => {
@@ -163,7 +164,16 @@ export default function Shop() {
     const newCats = selectedCats.includes(slug)
       ? selectedCats.filter(c => c !== slug)
       : [...selectedCats, slug];
-    applyFiltersToUrl({ category: newCats });
+    
+    // When changing category, it's best to reset subcategory to avoid invalid combinations
+    applyFiltersToUrl({ category: newCats, subcategory: [] });
+  };
+
+  const handleSubcatChange = (name) => {
+    const newSubcats = selectedSubcat.includes(name)
+      ? selectedSubcat.filter(s => s !== name)
+      : [...selectedSubcat, name];
+    applyFiltersToUrl({ subcategory: newSubcats });
   };
 
   const handleFabricChange = (name) => {
@@ -311,6 +321,83 @@ export default function Shop() {
         </div>
       </div>
 
+      {/* Active Filter Chips */}
+      {(selectedCats.length > 0 || selectedSubcat.length > 0 || selectedFabrics.length > 0 || selectedColors.length > 0 || selectedSizes.length > 0 || priceRange.min || priceRange.max || inStockOnly || minRating || minDiscount) && (
+        <div className="flex flex-wrap items-center gap-2 mb-6 select-none">
+          <span className="text-xs font-semibold text-brand-dark mr-1">Active Filters:</span>
+          
+          {selectedCats.map(cat => (
+            <span key={`cat-${cat}`} className="flex items-center space-x-1.5 bg-brand-cream border border-brand-border px-2.5 py-1 rounded text-[10px] sm:text-xs font-sans text-brand-dark">
+              <span>Category: {availableFilters.categories.find(c => c.slug === cat)?.name || cat}</span>
+              <button onClick={() => handleCatChange(cat)} className="text-brand-muted hover:text-brand-crimson"><X size={12} /></button>
+            </span>
+          ))}
+
+          {selectedSubcat.map(sub => (
+            <span key={`sub-${sub}`} className="flex items-center space-x-1.5 bg-brand-cream border border-brand-border px-2.5 py-1 rounded text-[10px] sm:text-xs font-sans text-brand-dark">
+              <span>Type: {sub}</span>
+              <button onClick={() => handleSubcatChange(sub)} className="text-brand-muted hover:text-brand-crimson"><X size={12} /></button>
+            </span>
+          ))}
+
+          {selectedFabrics.map(fab => (
+            <span key={`fab-${fab}`} className="flex items-center space-x-1.5 bg-brand-cream border border-brand-border px-2.5 py-1 rounded text-[10px] sm:text-xs font-sans text-brand-dark">
+              <span>Fabric: {fab}</span>
+              <button onClick={() => handleFabricChange(fab)} className="text-brand-muted hover:text-brand-crimson"><X size={12} /></button>
+            </span>
+          ))}
+
+          {selectedColors.map(col => (
+            <span key={`col-${col}`} className="flex items-center space-x-1.5 bg-brand-cream border border-brand-border px-2.5 py-1 rounded text-[10px] sm:text-xs font-sans text-brand-dark">
+              <span>Color: {col}</span>
+              <button onClick={() => handleColorChange(col)} className="text-brand-muted hover:text-brand-crimson"><X size={12} /></button>
+            </span>
+          ))}
+
+          {selectedSizes.map(sz => (
+            <span key={`size-${sz}`} className="flex items-center space-x-1.5 bg-brand-cream border border-brand-border px-2.5 py-1 rounded text-[10px] sm:text-xs font-sans text-brand-dark">
+              <span>Size: {sz}</span>
+              <button onClick={() => handleSizeChange(sz)} className="text-brand-muted hover:text-brand-crimson"><X size={12} /></button>
+            </span>
+          ))}
+
+          {(priceRange.min || priceRange.max) && (
+            <span className="flex items-center space-x-1.5 bg-brand-cream border border-brand-border px-2.5 py-1 rounded text-[10px] sm:text-xs font-sans text-brand-dark">
+              <span>Price: ₹{priceRange.min || '0'} - ₹{priceRange.max || 'Any'}</span>
+              <button onClick={() => { setPriceRange({min: '', max: ''}); applyFiltersToUrl({ minPrice: '', maxPrice: '' }) }} className="text-brand-muted hover:text-brand-crimson"><X size={12} /></button>
+            </span>
+          )}
+
+          {inStockOnly && (
+            <span className="flex items-center space-x-1.5 bg-brand-cream border border-brand-border px-2.5 py-1 rounded text-[10px] sm:text-xs font-sans text-brand-dark">
+              <span>In Stock</span>
+              <button onClick={() => applyFiltersToUrl({ inStock: '' })} className="text-brand-muted hover:text-brand-crimson"><X size={12} /></button>
+            </span>
+          )}
+
+          {minRating && (
+            <span className="flex items-center space-x-1.5 bg-brand-cream border border-brand-border px-2.5 py-1 rounded text-[10px] sm:text-xs font-sans text-brand-dark">
+              <span>Rating: {minRating}★+</span>
+              <button onClick={() => applyFiltersToUrl({ rating: '' })} className="text-brand-muted hover:text-brand-crimson"><X size={12} /></button>
+            </span>
+          )}
+
+          {minDiscount && (
+            <span className="flex items-center space-x-1.5 bg-brand-cream border border-brand-border px-2.5 py-1 rounded text-[10px] sm:text-xs font-sans text-brand-dark">
+              <span>Discount: {minDiscount}%+</span>
+              <button onClick={() => applyFiltersToUrl({ discount: '' })} className="text-brand-muted hover:text-brand-crimson"><X size={12} /></button>
+            </span>
+          )}
+
+          <button
+            onClick={clearAllFilters}
+            className="text-[10px] sm:text-xs font-bold text-brand-crimson ml-2 hover:underline"
+          >
+            Clear All
+          </button>
+        </div>
+      )}
+
       {/* Main Grid: Sidebar + Gallery */}
       <div className="flex flex-col lg:flex-row gap-8">
         
@@ -332,41 +419,66 @@ export default function Shop() {
 
           <div className="space-y-6">
             
-            {/* 1. Category */}
-            <div>
-              <span className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2.5">Category</span>
-              <div className="space-y-1.5 font-sans text-xs text-brand-muted">
-                {categories.map(cat => (
-                  <label key={cat._id} className="flex items-center space-x-2.5 cursor-pointer hover:text-brand-crimson">
-                    <input
-                      type="checkbox"
-                      checked={selectedCats.includes(cat.slug)}
-                      onChange={() => handleCatChange(cat.slug)}
-                      className="rounded text-brand-crimson focus:ring-brand-crimson h-3.5 w-3.5 border-brand-border"
-                    />
-                    <span>{cat.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            {/* 1. Category / Types (Dynamic) */}
+            {selectedCats.length === 0 ? (
+              availableFilters.categories.length > 0 && (
+                <div>
+                  <span className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2.5">Category</span>
+                  <div className="space-y-1.5 font-sans text-xs text-brand-muted">
+                    {availableFilters.categories.map(cat => (
+                      <label key={cat._id} className="flex items-center space-x-2.5 cursor-pointer hover:text-brand-crimson">
+                        <input
+                          type="checkbox"
+                          checked={selectedCats.includes(cat.slug)}
+                          onChange={() => handleCatChange(cat.slug)}
+                          className="rounded text-brand-crimson focus:ring-brand-crimson h-3.5 w-3.5 border-brand-border"
+                        />
+                        <span>{cat.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )
+            ) : (
+              availableFilters.types.length > 0 && (
+                <div>
+                  <span className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2.5">Types</span>
+                  <div className="space-y-1.5 font-sans text-xs text-brand-muted">
+                    {availableFilters.types.map(type => (
+                      <label key={type} className="flex items-center space-x-2.5 cursor-pointer hover:text-brand-crimson">
+                        <input
+                          type="checkbox"
+                          checked={selectedSubcat.includes(type)}
+                          onChange={() => handleSubcatChange(type)}
+                          className="rounded text-brand-crimson focus:ring-brand-crimson h-3.5 w-3.5 border-brand-border"
+                        />
+                        <span>{type}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )
+            )}
 
-            {/* 2. Fabric */}
-            <div>
-              <span className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2.5">Fabric</span>
-              <div className="space-y-1.5 font-sans text-xs text-brand-muted">
-                {FABRICS.map(fab => (
-                  <label key={fab} className="flex items-center space-x-2.5 cursor-pointer hover:text-brand-crimson">
-                    <input
-                      type="checkbox"
-                      checked={selectedFabrics.includes(fab)}
-                      onChange={() => handleFabricChange(fab)}
-                      className="rounded text-brand-crimson focus:ring-brand-crimson h-3.5 w-3.5 border-brand-border"
-                    />
-                    <span>{fab}</span>
-                  </label>
-                ))}
+            {/* 2. Fabric (Dynamic) */}
+            {availableFilters.fabrics.length > 0 && (
+              <div>
+                <span className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2.5">Fabric</span>
+                <div className="space-y-1.5 font-sans text-xs text-brand-muted">
+                  {availableFilters.fabrics.map(fab => (
+                    <label key={fab} className="flex items-center space-x-2.5 cursor-pointer hover:text-brand-crimson">
+                      <input
+                        type="checkbox"
+                        checked={selectedFabrics.includes(fab)}
+                        onChange={() => handleFabricChange(fab)}
+                        className="rounded text-brand-crimson focus:ring-brand-crimson h-3.5 w-3.5 border-brand-border"
+                      />
+                      <span>{fab}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* 3. Price Range inputs */}
             <div>
@@ -392,47 +504,51 @@ export default function Shop() {
               </div>
             </div>
 
-            {/* 4. Color Swatches pickers */}
-            <div>
-              <span className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2.5">Color</span>
-              <div className="flex flex-wrap gap-2">
-                {COLORS.map((col) => (
-                  <button
-                    key={col.name}
-                    onClick={() => handleColorChange(col.name)}
-                    className={`w-6 h-6 rounded-full border shadow-2xs hover:scale-105 transition-all flex items-center justify-center ${
-                      selectedColors.includes(col.name) ? 'ring-2 ring-brand-crimson border-brand-white scale-105' : 'border-brand-border'
-                    }`}
-                    style={{ backgroundColor: col.hex }}
-                    title={col.name}
-                  >
-                    {selectedColors.includes(col.name) && (
-                      <span className="w-1 h-1 bg-brand-white rounded-full mix-blend-difference" />
-                    )}
-                  </button>
-                ))}
+            {/* 4. Color Swatches pickers (Dynamic) */}
+            {availableFilters.colors.length > 0 && (
+              <div>
+                <span className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2.5">Color</span>
+                <div className="flex flex-wrap gap-2">
+                  {availableFilters.colors.map((col) => (
+                    <button
+                      key={col.name}
+                      onClick={() => handleColorChange(col.name)}
+                      className={`w-6 h-6 rounded-full border shadow-2xs hover:scale-105 transition-all flex items-center justify-center ${
+                        selectedColors.includes(col.name) ? 'ring-2 ring-brand-crimson border-brand-white scale-105' : 'border-brand-border'
+                      }`}
+                      style={{ backgroundColor: col.hex || '#ccc' }}
+                      title={col.name}
+                    >
+                      {selectedColors.includes(col.name) && (
+                        <span className="w-1 h-1 bg-brand-white rounded-full mix-blend-difference" />
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* 5. Size Buttons */}
-            <div>
-              <span className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2.5">Size</span>
-              <div className="flex flex-wrap gap-1.5 font-sans">
-                {SIZES.map((sz) => (
-                  <button
-                    key={sz}
-                    onClick={() => handleSizeChange(sz)}
-                    className={`px-2 py-1 text-2xs font-semibold rounded border transition-all ${
-                      selectedSizes.includes(sz)
-                        ? 'bg-brand-crimson text-brand-cream border-brand-crimson shadow-2xs'
-                        : 'bg-brand-white border-brand-border text-brand-dark hover:border-brand-crimson'
-                    }`}
-                  >
-                    {sz}
-                  </button>
-                ))}
+            {/* 5. Size Buttons (Dynamic) */}
+            {availableFilters.sizes.length > 0 && (
+              <div>
+                <span className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2.5">Size</span>
+                <div className="flex flex-wrap gap-1.5 font-sans">
+                  {availableFilters.sizes.map((sz) => (
+                    <button
+                      key={sz}
+                      onClick={() => handleSizeChange(sz)}
+                      className={`px-2 py-1 text-2xs font-semibold rounded border transition-all ${
+                        selectedSizes.includes(sz)
+                          ? 'bg-brand-crimson text-brand-cream border-brand-crimson shadow-2xs'
+                          : 'bg-brand-white border-brand-border text-brand-dark hover:border-brand-crimson'
+                      }`}
+                    >
+                      {sz}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* 6. Rating */}
             <div>
@@ -512,7 +628,7 @@ export default function Shop() {
               animate="whileInView"
               exit="exit"
               variants={staggerContainer}
-              className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6"
+              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-8 sm:gap-x-8 sm:gap-y-12"
             >
               {products.map(prod => (
                 <motion.div variants={fadeInUp} key={prod._id} layout>

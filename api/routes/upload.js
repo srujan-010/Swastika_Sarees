@@ -45,11 +45,12 @@ router.post('/', requireAuth, upload.single('image'), async (req, res) => {
   }
 
   try {
+    const customFolder = req.body.folderPath ? `/${req.body.folderPath.replace(/^\/+|\/+$/g, '')}` : '';
     // Stream the buffer to Cloudinary
     const result = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
-          folder: 'swastika_sarees',
+          folder: `swastika_sarees${customFolder}`,
           // Preserve original quality — no lossy compression, no resize
           quality: 'auto:best',
           fetch_format: 'auto',

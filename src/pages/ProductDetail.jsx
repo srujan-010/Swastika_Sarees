@@ -51,7 +51,7 @@ export default function ProductDetail() {
         
         // Select default variant choices
         const defaultVariant = data.variants?.[0];
-        setSelectedColor(defaultVariant?.colorName || null);
+        setSelectedColor(defaultVariant?.colorName || data.mainProduct?.primaryColor?.name || data.colorName || null);
         const showSizeInit = data.showSizeChart !== false && data.category?.slug !== 'sarees';
         setSelectedSize(showSizeInit ? (defaultVariant?.size || null) : null);
         setActiveImageIndex(0);
@@ -99,6 +99,24 @@ export default function ProductDetail() {
     setRecentlyViewed(cached.filter(p => p.slug !== slug).slice(0, 8));
   }, [slug]);
 
+  // Reset active image index when color changes
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [selectedColor]);
+
+  // Preload primary images of all variants for smooth switching
+  useEffect(() => {
+    if (product?.variants) {
+      product.variants.forEach(v => {
+        const primaryImg = v.images?.find(i => i.isPrimary) || v.images?.[0];
+        if (primaryImg?.url) {
+          const img = new Image();
+          img.src = primaryImg.url;
+        }
+      });
+    }
+  }, [product]);
+
   const trackRecentlyViewed = (prod) => {
     const cached = JSON.parse(localStorage.getItem('swastika_recently_viewed')) || [];
     const filtered = cached.filter(p => p._id !== prod._id);
@@ -129,21 +147,62 @@ export default function ProductDetail() {
   if (!product) return null;
 
   const isSaved = isInWishlist(product._id);
-  const images = product.images && product.images.length > 0 ? product.images : [{ url: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=600' }];
+
+  const activeVariant = product?.variants?.find(v => 
+    v.colorName === selectedColor && (selectedSize ? v.size === selectedSize : true)
+  ) || product?.variants?.find(v => v.colorName === selectedColor);
+
+  const images = activeVariant?.images?.length > 0 
+    ? activeVariant.images 
+    : (product.mainProduct?.images?.length > 0 ? product.mainProduct.images : (product.images?.length > 0 ? product.images : [{ url: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=600' }]));
+
+  const safeImageIndex = Math.min(activeImageIndex, Math.max(0, images.length - 1));
+
+
+
+  const displaySku = activeVariant?.variantSku || product.sku;
+  const displayStock = activeVariant?.stock !== undefined ? activeVariant.stock : product.stock;
+  const displayAvailability = activeVariant?.availability || product.availability || 'Single Ready';
+  const displayVideo = activeVariant?.video || product.productVideo;
   
-  const currentPrice = product.price / 100;
-  const originalPrice = product.originalPrice ? product.originalPrice / 100 : null;
+  const basePrice = product.price / 100;
+  const extraPrice = activeVariant?.extraPricePaise ? activeVariant.extraPricePaise / 100 : 0;
+  const currentPrice = basePrice + extraPrice;
+  const originalPrice = product.originalPrice ? (product.originalPrice / 100) + extraPrice : null;
   const discountPercent = originalPrice ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0;
 
-  // Extract unique variants
+  // Extract unique variants or fallback to primary product color
   const colorsMap = new Map();
   const sizesMap = new Map();
-  product.variants?.forEach(v => {
-    if (v.colorName && !colorsMap.has(v.colorName)) colorsMap.set(v.colorName, v.colorHex);
-    if (v.size && !sizesMap.has(v.size)) sizesMap.set(v.size, true);
-  });
+  
+  const defaultImageUrl = product.mainProduct?.images?.find(i => i.isPrimary)?.url || product.mainProduct?.images?.[0]?.url || product.images?.find(i => i.isPrimary)?.url || product.images?.[0]?.url || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=400';
 
-  const uniqueColors = Array.from(colorsMap.entries()).map(([name, hex]) => ({ name, hex }));
+  if (product.mainProduct?.primaryColor?.name || product.colorName) {
+    colorsMap.set(
+       product.mainProduct?.primaryColor?.name || product.colorName, 
+       {
+         hex: product.mainProduct?.primaryColor?.hex || product.colorHex || '#000000',
+         imageUrl: defaultImageUrl,
+         availability: product.availability || 'Single Ready'
+       }
+    );
+  }
+
+  if (product.variants && product.variants.length > 0) {
+    product.variants.forEach(v => {
+      if (v.colorName && !colorsMap.has(v.colorName)) {
+        const variantImageUrl = v.images?.find(i => i.isPrimary)?.url || v.images?.[0]?.url || defaultImageUrl;
+        colorsMap.set(v.colorName, {
+          hex: v.colorHex,
+          imageUrl: variantImageUrl,
+          availability: v.availability || product.availability || 'Single Ready'
+        });
+      }
+      if (v.size && !sizesMap.has(v.size)) sizesMap.set(v.size, true);
+    });
+  }
+
+  const uniqueColors = Array.from(colorsMap.entries()).map(([name, data]) => ({ name, ...data }));
   const uniqueSizes = Array.from(sizesMap.keys());
   const showSize = product.showSizeChart !== false && product.category?.slug !== 'sarees';
 
@@ -267,15 +326,22 @@ export default function ProductDetail() {
           <div className="w-full aspect-[3/4] rounded-2xl overflow-hidden bg-brand-cream border border-brand-border/40 shadow-xs relative select-none">
             
             {/* Primary Zoom image (CSS hover transition) */}
-            <div className="w-full h-full cursor-zoom-in overflow-hidden">
-              <img
-                src={images[activeImageIndex]?.url}
-                alt={product.name}
-                className="w-full h-full object-cover object-top hover:scale-125 transition-transform duration-500 ease-out"
-              />
+            <div className="w-full h-full cursor-zoom-in overflow-hidden bg-brand-cream relative">
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={images[safeImageIndex]?.url}
+                  src={images[safeImageIndex]?.url}
+                  alt={`${product.name} - ${selectedColor}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                  className="w-full h-full object-cover object-top hover:scale-125 transition-transform duration-500 ease-out absolute inset-0 origin-center"
+                />
+              </AnimatePresence>
             </div>
 
-            {product.stock === 0 && (
+            {displayStock === 0 && (
               <div className="absolute inset-0 bg-brand-dark/15 backdrop-blur-2xs flex items-center justify-center select-none pointer-events-none z-10">
                 <div className="flex flex-col items-center justify-center bg-white/90 backdrop-blur-md border border-white/20 text-brand-dark p-5 rounded-full shadow-2xl animate-float-slow" style={{ width: "130px", height: "130px" }}>
                   <AlertTriangle size={32} className="text-brand-dark animate-bounce mb-1" />
@@ -293,7 +359,7 @@ export default function ProductDetail() {
                   key={index}
                   onClick={() => setActiveImageIndex(index)}
                   className={`w-14 h-20 rounded-md overflow-hidden border shrink-0 transition-all ${
-                    activeImageIndex === index ? 'border-brand-crimson ring-1 ring-brand-crimson scale-102' : 'border-brand-border/60 opacity-70 hover:opacity-100'
+                    safeImageIndex === index ? 'border-brand-crimson ring-1 ring-brand-crimson scale-102' : 'border-brand-border/60 opacity-70 hover:opacity-100'
                   }`}
                 >
                   <img src={img.url} alt="" className="w-full h-full object-cover object-top" />
@@ -306,8 +372,14 @@ export default function ProductDetail() {
         {/* Column 2: Buy details */}
         <motion.div variants={fadeInUp} className="w-full lg:w-1/2 text-left flex flex-col">
           
-          <span className="text-xs font-bold text-brand-gold uppercase tracking-wider mb-2 font-sans select-none">
-            {product.category?.name}
+          <span className="text-xs font-bold text-brand-gold uppercase tracking-wider mb-2 font-sans select-none flex items-center space-x-2">
+            <span>{product.brand ? product.brand : product.category?.name}</span>
+            {product.brand && (
+              <>
+                <span className="text-brand-muted/40">•</span>
+                <span className="text-brand-muted">{product.category?.name}</span>
+              </>
+            )}
           </span>
 
           <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold text-brand-dark leading-tight mb-3">
@@ -359,8 +431,8 @@ export default function ProductDetail() {
             {product.fabric && (
               <div><strong>Fabric:</strong> <span className="text-brand-dark">{product.fabric}</span></div>
             )}
-            {product.sku && (
-              <div><strong>SKU:</strong> <span className="text-brand-dark">{product.sku}</span></div>
+            {displaySku && (
+              <div><strong>SKU:</strong> <span className="text-brand-dark">{displaySku}</span></div>
             )}
             <div><strong>Shipping:</strong> <span className="text-brand-dark">Free above ₹999</span></div>
             <div><strong>COD:</strong> <span className="text-brand-dark">Available (₹50 extra)</span></div>
@@ -369,28 +441,53 @@ export default function ProductDetail() {
           {/* Variants selection */}
           <div className="space-y-5 mb-6 select-none">
             
-            {/* Color select swatches */}
+            {/* Variant Cards */}
             {uniqueColors.length > 0 && (
               <div>
                 <span className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2.5">
                   Select Color: <span className="text-brand-gold font-sans">{selectedColor}</span>
                 </span>
-                <div className="flex flex-wrap gap-2.5">
-                  {uniqueColors.map((color) => (
-                    <button
-                      key={color.name}
-                      onClick={() => setSelectedColor(color.name)}
-                      className={`w-8 h-8 rounded-full border shadow-2xs hover:scale-105 transition-all flex items-center justify-center ${
-                        selectedColor === color.name ? 'ring-2 ring-brand-crimson border-brand-white scale-105' : 'border-brand-border'
-                      }`}
-                      style={{ backgroundColor: color.hex || '#ccc' }}
-                      title={color.name}
-                    >
-                      {selectedColor === color.name && (
-                        <span className="w-1.5 h-1.5 bg-brand-white rounded-full mix-blend-difference" />
-                      )}
-                    </button>
-                  ))}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:flex md:flex-wrap gap-3">
+                  {uniqueColors.map((color) => {
+                    const isSelected = selectedColor === color.name;
+                    return (
+                      <button
+                        key={color.name}
+                        onClick={() => setSelectedColor(color.name)}
+                        className={`relative rounded-xl overflow-hidden border bg-brand-white flex flex-col items-center transition-all duration-200 w-full md:w-[100px] h-[140px] ${
+                          isSelected 
+                            ? 'border-brand-gold ring-1 ring-brand-gold shadow-md scale-[1.02] z-10' 
+                            : 'border-brand-border/60 hover:border-brand-crimson/50 hover:shadow-xs'
+                        }`}
+                        title={color.name}
+                      >
+                        <div className="w-full h-[105px] bg-brand-cream shrink-0">
+                          <img 
+                            src={color.imageUrl} 
+                            alt={color.name} 
+                            className="w-full h-full object-cover object-top"
+                          />
+                        </div>
+                        <div className="w-full flex-1 flex flex-col justify-center items-center px-1.5 py-1">
+                          <span className="text-[10px] font-sans font-semibold text-brand-dark truncate w-full text-center">
+                            {color.name}
+                          </span>
+                        </div>
+                        
+                        {isSelected && (
+                          <div className="absolute top-1 right-1 bg-brand-gold text-brand-cream rounded-full px-1.5 py-0.5 text-[8px] font-bold shadow-sm flex items-center space-x-0.5 z-10">
+                            <Check size={8} /> <span>Selected</span>
+                          </div>
+                        )}
+                        
+                        {color.availability && color.availability.toLowerCase().includes('out of stock') && (
+                          <div className="absolute inset-0 bg-brand-white/40 backdrop-blur-[1px] flex flex-col items-center justify-center z-20">
+                            <span className="bg-brand-crimson text-brand-cream text-[9px] px-2 py-0.5 font-bold uppercase tracking-wider rounded">Sold Out</span>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -420,7 +517,7 @@ export default function ProductDetail() {
             )}
 
             {/* Quantity stepper block */}
-            {product.stock > 0 && (
+            {displayStock > 0 && (
               <div>
                 <span className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2">Quantity</span>
                 <div className="flex items-center space-x-3 w-32 border border-brand-border bg-brand-cream rounded-md p-1">
@@ -432,7 +529,7 @@ export default function ProductDetail() {
                   </button>
                   <span className="flex-1 text-center text-sm font-bold text-brand-dark font-sans">{quantity}</span>
                   <button
-                    onClick={() => setQuantity(q => Math.min(product.stock, q + 1))}
+                    onClick={() => setQuantity(q => Math.min(displayStock, q + 1))}
                     className="p-1 hover:bg-brand-border rounded transition-colors text-brand-dark"
                   >
                     <Plus size={14} />
@@ -447,7 +544,7 @@ export default function ProductDetail() {
           <div className="flex flex-col sm:flex-row gap-3 mb-6 select-none">
             <button
               onClick={handleAddToCart}
-              disabled={product.stock === 0}
+              disabled={displayStock === 0}
               className="flex-1 bg-brand-crimson hover:bg-brand-muted disabled:bg-brand-muted/20 text-brand-cream py-3.5 rounded-lg flex items-center justify-center space-x-2 font-semibold transition-colors shadow-md border border-brand-gold/30 disabled:border-none"
             >
               <ShoppingBag size={18} />
@@ -455,7 +552,7 @@ export default function ProductDetail() {
             </button>
             <button
               onClick={handleBuyNow}
-              disabled={product.stock === 0}
+              disabled={displayStock === 0}
               className="flex-1 bg-brand-gold hover:bg-brand-gold-light disabled:bg-brand-gold/20 text-brand-dark py-3.5 rounded-lg flex items-center justify-center space-x-2 font-semibold transition-colors shadow-md"
             >
               <span>Buy Now</span>
@@ -522,14 +619,24 @@ export default function ProductDetail() {
           </div>
 
           {/* Expected Delivery Date Block */}
-          <div className="bg-brand-white border border-brand-border/60 p-4 rounded-xl mb-6 select-none font-sans text-xs">
-            <span className="block text-xs font-semibold text-brand-dark uppercase tracking-wider mb-2 font-display">Expected Delivery Date</span>
-            <div className="flex items-center space-x-2 text-brand-dark mt-1">
-              <span className="font-bold text-brand-crimson text-sm">
-                {getExpectedDeliveryDateString(settings?.deliveryDays || 7)}
-              </span>
-              <span className="text-3xs text-brand-muted font-medium">({settings?.deliveryDays || 7} Days Gap)</span>
+          <div className="bg-brand-white border border-brand-border/60 p-4 rounded-xl mb-6 select-none font-sans text-xs flex flex-col space-y-3">
+            <div>
+              <span className="block text-xs font-semibold text-brand-dark uppercase tracking-wider mb-2 font-display">Expected Delivery Date</span>
+              <div className="flex items-center space-x-2 text-brand-dark mt-1">
+                <span className="font-bold text-brand-crimson text-sm">
+                  {getExpectedDeliveryDateString(settings?.deliveryDays || 7)}
+                </span>
+                <span className="text-3xs text-brand-muted font-medium">({settings?.deliveryDays || 7} Days Gap)</span>
+              </div>
             </div>
+            {product.dispatchTime && (
+              <div className="border-t border-brand-border/40 pt-3">
+                <span className="block text-xs font-semibold text-brand-dark uppercase tracking-wider mb-1 font-display">Dispatch</span>
+                <div className="text-brand-muted text-sm font-medium">
+                  {product.dispatchTime}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Promo Strip */}
@@ -601,6 +708,57 @@ export default function ProductDetail() {
                   </div>
                 )}
               </div>
+
+              {/* Product Highlights */}
+              {product.productHighlights && product.productHighlights.length > 0 && (
+                <div className="mt-6 border-t border-brand-border/40 pt-6">
+                  <h5 className="font-display font-semibold text-brand-dark mb-3 text-sm">Product Highlights</h5>
+                  <ul className="list-disc pl-5 space-y-1 text-brand-muted">
+                    {product.productHighlights.map((highlight, idx) => (
+                      <li key={idx}>{highlight}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Saree Specifications Table */}
+              {(product.sareeLength || product.sareeWidth || product.sareeWeight || product.blousePiece || product.latkan) && (
+                <div className="mt-6 border-t border-brand-border/40 pt-6">
+                  <h5 className="font-display font-semibold text-brand-dark mb-3 text-sm">Specifications</h5>
+                  <div className="bg-brand-cream/30 rounded-lg overflow-hidden border border-brand-border/50 text-sm w-full md:w-2/3 lg:w-1/2">
+                    {product.sareeLength && (
+                      <div className="flex border-b border-brand-border/50 last:border-0"><div className="w-1/3 bg-brand-cream/50 p-3 font-semibold text-brand-dark">Saree Length</div><div className="w-2/3 p-3 text-brand-muted">{product.sareeLength}</div></div>
+                    )}
+                    {product.sareeWidth && (
+                      <div className="flex border-b border-brand-border/50 last:border-0"><div className="w-1/3 bg-brand-cream/50 p-3 font-semibold text-brand-dark">Saree Width</div><div className="w-2/3 p-3 text-brand-muted">{product.sareeWidth}</div></div>
+                    )}
+                    {product.sareeWeight && (
+                      <div className="flex border-b border-brand-border/50 last:border-0"><div className="w-1/3 bg-brand-cream/50 p-3 font-semibold text-brand-dark">Weight</div><div className="w-2/3 p-3 text-brand-muted">{product.sareeWeight}</div></div>
+                    )}
+                    {product.blousePiece && (
+                      <div className="flex border-b border-brand-border/50 last:border-0"><div className="w-1/3 bg-brand-cream/50 p-3 font-semibold text-brand-dark">Blouse Piece</div><div className="w-2/3 p-3 text-brand-muted">{product.blousePiece} {product.blouseType && product.blousePiece === 'Included' ? `(${product.blouseType})` : ''}</div></div>
+                    )}
+                    {product.latkan && (
+                      <div className="flex border-b border-brand-border/50 last:border-0"><div className="w-1/3 bg-brand-cream/50 p-3 font-semibold text-brand-dark">Latkan</div><div className="w-2/3 p-3 text-brand-muted">{product.latkan}</div></div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Product Video */}
+              {product.productVideo && (
+                <div className="mt-8 border-t border-brand-border/40 pt-6">
+                  <h5 className="font-display font-semibold text-brand-dark mb-4 text-sm">Product Video</h5>
+                  <div className="w-full max-w-[320px] aspect-[9/16] bg-brand-dark rounded-xl overflow-hidden shadow-lg relative">
+                    <iframe
+                      src={product.productVideo.replace("watch?v=", "embed/").replace("shorts/", "embed/")}
+                      className="absolute inset-0 w-full h-full border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    ></iframe>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

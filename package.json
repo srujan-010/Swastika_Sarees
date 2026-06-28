@@ -7,7 +7,7 @@
     "dev": "concurrently -k -p \"[{name}]\" -n \"server,client\" -c \"yellow,blue\" \"npm run server\" \"vite\"",
     "build": "vite build",
     "preview": "vite preview",
-    "server": "node api/index.js",
+    "server": "nodemon api/index.js",
     "start": "node api/index.js"
   },
   "dependencies": {
@@ -35,6 +35,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.19",
     "concurrently": "^10.0.3",
+    "nodemon": "^3.1.14",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.1",
     "vite": "^5.1.6"

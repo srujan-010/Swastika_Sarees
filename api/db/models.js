@@ -39,21 +39,26 @@ const CategorySchema = new Schema({
   }]
 }, { timestamps: true });
 
-// 4. Variant Schema (Nested inside Product)
-const VariantSchema = new Schema({
-  colorName: { type: String },
-  colorHex: { type: String },
-  size: { type: String },
-  stock: { type: Number, default: 0 },
-  extraPricePaise: { type: Number, default: 0 } // Extra price to add to product base price
-});
-
-// 5. Image Schema (Nested inside Product)
+// 4. Image Schema (Nested inside Product)
 const ImageSchema = new Schema({
   url: { type: String, required: true },
   altText: { type: String },
   displayOrder: { type: Number, default: 0 },
   isPrimary: { type: Boolean, default: false }
+});
+
+// 5. Variant Schema (Nested inside Product)
+const VariantSchema = new Schema({
+  colorName: { type: String },
+  colorHex: { type: String },
+  size: { type: String },
+  stock: { type: Number, default: 0 },
+  extraPricePaise: { type: Number, default: 0 }, // Extra price to add to product base price
+  variantSku: { type: String },
+  availability: { type: String, enum: ['Single Ready', 'Bulk Ready', 'Single & Bulk Ready', 'Made To Order', 'Pre Order'] },
+  images: [ImageSchema],
+  primaryImage: { type: String },
+  video: { type: String }
 });
 
 // 6. Product Schema
@@ -62,6 +67,24 @@ const ProductSchema = new Schema({
   slug: { type: String, required: true, unique: true },
   category: { type: Schema.Types.ObjectId, ref: 'Category', required: true },
   subCategory: { type: String },
+  brand: { type: String },
+  
+  // New Nested Structure
+  mainProduct: {
+    primaryColor: {
+      name: { type: String },
+      hex: { type: String }
+    },
+    images: [ImageSchema],
+    primaryImage: { type: String },
+    video: { type: String }
+  },
+
+  // Legacy flat fields (kept for backward compatibility during migration)
+  colorName: { type: String },
+  colorHex: { type: String },
+  images: [ImageSchema],
+
   description: { type: String },
   fabric: { type: String },
   careInstructions: { type: String },
@@ -76,8 +99,18 @@ const ProductSchema = new Schema({
   isFeatured: { type: Boolean, default: false },
   isBestseller: { type: Boolean, default: false },
   isNewArrival: { type: Boolean, default: false },
-  images: [ImageSchema],
+  
   variants: [VariantSchema],
+  productVideo: { type: String },
+  productHighlights: [{ type: String }],
+  sareeLength: { type: String },
+  sareeWidth: { type: String },
+  sareeWeight: { type: String },
+  blousePiece: { type: String, enum: ['Included', 'Not Included'] },
+  blouseType: { type: String, enum: ['Running Blouse', 'Separate Blouse Piece', 'Designer Blouse', 'Plain Blouse', 'Not Applicable'] },
+  latkan: { type: String, enum: ['Included', 'Not Included'] },
+  availability: { type: String, enum: ['Single Ready', 'Bulk Ready', 'Single & Bulk Ready', 'Made To Order', 'Pre Order'] },
+  dispatchTime: { type: String, enum: ['Ships in 24 Hours', 'Ships in 2 Days', 'Ships in 3 Days', 'Ships in 5 Days', 'Made To Order'] },
   seo: {
     metaTitle: { type: String },
     metaDescription: { type: String },

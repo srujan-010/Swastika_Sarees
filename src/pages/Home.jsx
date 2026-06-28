@@ -24,6 +24,9 @@ export default function Home() {
   const [popupPhone, setPopupPhone] = useState('');
   const [popupSubmitting, setPopupSubmitting] = useState(false);
   const [popupSuccess, setPopupSuccess] = useState(false);
+  const [activeThumbnailIndex, setActiveThumbnailIndex] = useState(0);
+  const [isHoveringCarousel, setIsHoveringCarousel] = useState(false);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   // Trigger popup after 10s or 200px scroll for unsigned-in new users
   useEffect(() => {
@@ -169,20 +172,23 @@ export default function Home() {
 
   const handleNextBanner = () => {
     setActiveBannerIndex((prev) => (prev + 1) % activeBanners.length);
+    setActiveThumbnailIndex(0);
   };
 
   const handlePrevBanner = () => {
     setActiveBannerIndex((prev) => (prev - 1 + activeBanners.length) % activeBanners.length);
+    setActiveThumbnailIndex(0);
   };
 
   // Auto-scroll: now correctly uses activeBanners (includes fallback mocks)
   useEffect(() => {
-    if (activeBanners.length <= 1) return;
+    if (activeBanners.length <= 1 || isHoveringCarousel) return;
     const interval = setInterval(() => {
       setActiveBannerIndex((prev) => (prev + 1) % activeBanners.length);
+      setActiveThumbnailIndex(0);
     }, 6000);
     return () => clearInterval(interval);
-  }, [activeBanners.length]);
+  }, [activeBanners.length, isHoveringCarousel]);
 
   // Auto-scroll reviews carousel
   useEffect(() => {
@@ -192,6 +198,61 @@ export default function Home() {
     }, 5500);
     return () => clearInterval(interval);
   }, [activeReviews.length]);
+
+  const handleMouseMove = (e) => {
+    const { clientX, clientY } = e;
+    const x = (clientX / window.innerWidth - 0.5) * 15;
+    const y = (clientY / window.innerHeight - 0.5) * 15;
+    setMousePosition({ x, y });
+  };
+
+  const premiumSlideData = [
+    {
+      badge: 'NEW COLLECTION',
+      titleSplit: ['Royal Banarasi', 'Collection'],
+      description: 'Experience timeless craftsmanship woven by the master artisans of Banaras. Designed for celebrations, weddings, and unforgettable moments.',
+      chips: ['Pure Silk', 'Handwoven', 'Premium Finish', 'Wedding Collection'],
+      price: '₹4,999',
+      originalPrice: '₹8,999',
+      discountBadge: 'Save 45%',
+      thumbnails: [
+        'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=200',
+        'https://images.unsplash.com/photo-1583391733958-d25e07fac662?auto=format&fit=crop&q=80&w=200',
+        'https://images.unsplash.com/photo-1585848526322-87db98f2445c?auto=format&fit=crop&q=80&w=200',
+        'https://images.unsplash.com/photo-1608748010899-18f300247112?auto=format&fit=crop&q=80&w=200'
+      ]
+    },
+    {
+      badge: 'PREMIUM CHIFFON',
+      titleSplit: ['Summer Chiffon', 'Georgette'],
+      description: 'Embrace the summer breeze with our ultra-lightweight chiffon collection. Featuring vibrant prints and impeccable draping for effortless elegance.',
+      chips: ['Breathable', 'Vibrant Prints', 'Summer Ready', 'Easy Care'],
+      price: '₹1,499',
+      originalPrice: '₹2,999',
+      discountBadge: 'Save 50%',
+      thumbnails: [
+        'https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?auto=format&fit=crop&q=80&w=200',
+        'https://images.unsplash.com/photo-1596455607563-ad6193f76b5c?auto=format&fit=crop&q=80&w=200',
+        'https://images.unsplash.com/photo-1589465885857-44edb59bbff2?auto=format&fit=crop&q=80&w=200',
+        'https://images.unsplash.com/photo-1598530028795-0e68f863a8a3?auto=format&fit=crop&q=80&w=200'
+      ]
+    },
+    {
+      badge: 'FESTIVE SPECIAL',
+      titleSplit: ['Festive Special', 'Edition'],
+      description: 'Make a statement at your next celebration with our exclusive festive edition. Rich zari work and traditional motifs reimagined for the modern era.',
+      chips: ['Rich Zari', 'Traditional', 'Elegant Drape', 'Exclusive'],
+      price: '₹6,499',
+      originalPrice: '₹12,999',
+      discountBadge: 'Save 50%',
+      thumbnails: [
+        'https://images.unsplash.com/photo-1608748010899-18f300247112?auto=format&fit=crop&q=80&w=200',
+        'https://images.unsplash.com/photo-1585848526139-478db1738740?auto=format&fit=crop&q=80&w=200',
+        'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=200',
+        'https://images.unsplash.com/photo-1583391733958-d25e07fac662?auto=format&fit=crop&q=80&w=200'
+      ]
+    }
+  ];
 
   return (
     <div className="relative">
@@ -271,55 +332,153 @@ export default function Home() {
         </motion.section>
       )}
 
-      {/* 1. HERO BANNER CAROUSEL (First section below header) */}
-      <section className="relative h-[60vh] lg:h-[78vh] w-full overflow-hidden bg-brand-dark">
-        {activeBanners.map((slide, index) => (
-          <div
-            key={slide._id}
-            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-              activeBannerIndex === index ? 'opacity-100 z-10' : 'opacity-0 z-0'
-            }`}
-          >
-            {/* Slide Background Image */}
-            <motion.div
-              initial="initial"
-              animate={activeBannerIndex === index ? "animate" : "initial"}
-              variants={kenBurns}
-              className="absolute inset-0 bg-cover bg-center"
-              style={{ backgroundImage: `url(${slide.imageUrl})` }}
+      {/* 1. HERO BANNER CAROUSEL (Premium Editorial Vogue-Style) */}
+      {/* 1. HERO BANNER CAROUSEL (Premium Editorial Vogue-Style) */}
+      <section 
+        className="relative w-full overflow-hidden bg-[#FDFBF7] md:min-h-[85vh] lg:min-h-[90vh]"
+        style={{ minHeight: 'calc(100vh - 80px)' }}
+        onMouseEnter={() => setIsHoveringCarousel(true)}
+        onMouseLeave={() => setIsHoveringCarousel(false)}
+      >
+        {/* Soft layered cream gradients and ambient lighting */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-[#F4F0E6]/60 via-transparent to-[#FDFBF7] z-0 pointer-events-none"></div>
+
+        {/* Very light Banarasi weave / paisley texture at 2-5% opacity */}
+        <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none mix-blend-multiply bg-[url('https://www.transparenttextures.com/patterns/woven.png')]"></div>
+
+        {/* Flowing silk-inspired background waves connecting text and image */}
+        <svg className="absolute inset-0 w-full h-full z-0 opacity-[0.15] pointer-events-none" preserveAspectRatio="none" viewBox="0 0 1440 800" fill="none">
+          <path d="M0 200C300 300 600 0 1000 200C1300 350 1440 200 1440 200V800H0V200Z" fill="url(#silk-gradient)" />
+          <path d="M0 400C400 300 800 600 1200 400C1350 325 1440 400 1440 400V800H0V400Z" fill="url(#silk-gradient-2)" />
+          <defs>
+            <linearGradient id="silk-gradient" x1="0" y1="0" x2="1440" y2="800" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#D4AF37" stopOpacity="0.5"/>
+              <stop offset="1" stopColor="#D4AF37" stopOpacity="0.0"/>
+            </linearGradient>
+            <linearGradient id="silk-gradient-2" x1="1440" y1="0" x2="0" y2="800" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#D4AF37" stopOpacity="0.0"/>
+              <stop offset="1" stopColor="#D4AF37" stopOpacity="0.4"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        
+        {activeBanners.map((slide, index) => {
+          const extraData = premiumSlideData[index % premiumSlideData.length];
+
+          return (
+            <div
+              key={slide._id || index}
+              className={`absolute inset-0 transition-opacity duration-1000 ease-in-out flex flex-col md:flex-row px-4 sm:px-12 md:px-16 lg:px-24 py-8 md:py-16 lg:py-20 ${
+                activeBannerIndex === index ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+              }`}
             >
-              {/* Soft dark overlay (20-30%) for high readability */}
-              <div className="absolute inset-0 bg-black/40 z-10" />
-            </motion.div>
+              {/* Image Mobile (Top) / Desktop (Right Side 45%) */}
+              <div className="w-full md:w-[45%] h-[45%] md:h-full relative order-1 md:order-2 overflow-visible z-10 flex items-end justify-center md:justify-start lg:justify-center">
+                
+                {/* Decorative Background Elements behind the active model */}
+                <div className="absolute bottom-0 w-full h-[95%] flex items-end justify-center md:justify-start lg:justify-center pointer-events-none z-0">
+                  {/* Subtle radial golden glow */}
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(212,175,55,0.18)_0%,_transparent_60%)]"></div>
+                  {/* Large decorative arch */}
+                  <div className="w-[85%] md:w-[95%] lg:w-[85%] h-full border border-brand-gold/20 rounded-t-full bg-[#FDFBF7]/30 backdrop-blur-[2px] relative overflow-hidden shadow-[0_0_40px_rgba(212,175,55,0.05)]">
+                    <div className="absolute inset-0 bg-gradient-to-b from-brand-gold/10 to-transparent"></div>
+                  </div>
+                </div>
 
-            {/* Subtle Gold Shimmer particle animation layer */}
-            <div className="absolute inset-0 gold-shimmer opacity-20 z-10 pointer-events-none" />
+                <motion.div
+                  className="relative w-full h-full max-h-[105%] md:max-h-[100%] flex items-end justify-center md:justify-start lg:justify-center z-10"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={activeBannerIndex === index ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                  transition={{ opacity: { duration: 1.2 }, y: { duration: 1.2, ease: "easeOut" } }}
+                >
+                  <img
+                    src={slide.imageUrl}
+                    alt={slide.title}
+                    className="w-auto h-full object-contain object-bottom scale-[1.05] md:scale-[1.08] lg:scale-110 origin-bottom drop-shadow-2xl"
+                  />
+                </motion.div>
+              </div>
 
-            {/* Text details overlay */}
-            <div className="absolute inset-0 flex items-center justify-center z-20 text-center">
-              <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+              {/* Text Mobile (Bottom) / Desktop (Left Side 55%) */}
+              <div className="w-full md:w-[55%] h-[55%] md:h-full flex flex-col justify-center text-center md:text-left z-20 order-2 md:order-1 pt-6 md:pt-0 md:pl-6 lg:pl-12">
                 <AnimatePresence mode="wait">
                   {activeBannerIndex === index && (
-                    <motion.div 
+                    <motion.div
                       initial="initial"
-                      animate="whileInView"
-                      exit={{ opacity: 0, y: -20, transition: { duration: 0.3 } }}
-                      variants={staggerContainer}
-                      className="flex flex-col items-center justify-center text-center text-brand-cream space-y-6 max-w-2xl mx-auto"
+                      animate="animate"
+                      exit={{ opacity: 0, transition: { duration: 0.3 } }}
+                      variants={{
+                        initial: {},
+                        animate: { transition: { staggerChildren: 0.12 } }
+                      }}
+                      className="max-w-[580px] mx-auto md:mx-0 space-y-5 md:space-y-6 flex flex-col items-center md:items-start"
                     >
-                      <motion.h1 variants={fadeInUp} className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight drop-shadow-md italic tracking-wide">
-                        {slide.title}
-                      </motion.h1>
-                      <motion.p variants={fadeInUp} className="text-xs sm:text-sm md:text-base font-sans text-brand-cream/90 max-w-lg leading-relaxed tracking-wider uppercase">
-                        {slide.subtitle}
+                      {/* Small Collection Label */}
+                      <motion.div 
+                        variants={{ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
+                        className="inline-block"
+                      >
+                        <span className="text-[10px] sm:text-xs font-bold tracking-[0.3em] uppercase text-brand-dark/70 flex items-center justify-center md:justify-start">
+                          <span className="w-8 h-px bg-brand-gold mr-3 hidden md:block"></span>
+                          {extraData.badge}
+                          <span className="w-8 h-px bg-brand-gold ml-3 md:hidden block"></span>
+                        </span>
+                      </motion.div>
+
+                      {/* Large Luxury Heading */}
+                      <motion.div 
+                        variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
+                        className="font-display leading-[1.05] text-brand-dark flex flex-col space-y-1"
+                      >
+                        <span className="text-3xl sm:text-4xl md:text-[3.2rem] lg:text-[4rem] tracking-tight font-medium drop-shadow-sm">{extraData.titleSplit[0]}</span>
+                        <span className="text-3xl sm:text-4xl md:text-[3.2rem] lg:text-[4rem] italic text-brand-gold font-light">{extraData.titleSplit[1] || slide.title}</span>
+                      </motion.div>
+
+                      {/* Elegant Description */}
+                      <motion.p 
+                        variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
+                        className="font-sans text-xs sm:text-sm md:text-base text-brand-muted leading-relaxed font-light md:pr-10"
+                      >
+                        {extraData.description}
                       </motion.p>
-                      <motion.div variants={fadeInUp} className="pt-2">
+
+                      {/* Feature Chips */}
+                      <motion.div 
+                        variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
+                        className="flex flex-wrap justify-center md:justify-start gap-2 pt-1"
+                      >
+                        {extraData.chips.map((chip, idx) => (
+                          <span key={idx} className="text-[9px] sm:text-[10px] px-3 py-1 bg-brand-white/60 border border-brand-border/40 text-brand-dark/70 uppercase tracking-widest rounded-sm backdrop-blur-sm">
+                            {chip}
+                          </span>
+                        ))}
+                      </motion.div>
+
+                      {/* Price */}
+                      <motion.div 
+                        variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
+                        className="flex items-center space-x-4 pt-4"
+                      >
+                        <span className="text-xl sm:text-2xl md:text-3xl font-display font-medium text-brand-dark">{extraData.price}</span>
+                        <span className="text-xs sm:text-sm md:text-base text-brand-muted/70 line-through decoration-brand-muted/40 decoration-1">{extraData.originalPrice}</span>
+                      </motion.div>
+
+                      {/* Buttons */}
+                      <motion.div 
+                        variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
+                        className="flex flex-row items-center space-x-3 sm:space-x-4 pt-4 w-full justify-center md:justify-start"
+                      >
                         <Link
                           to={slide.ctaLink}
-                          className="inline-flex items-center space-x-2 bg-brand-crimson hover:bg-brand-muted text-brand-cream px-8 py-3.5 rounded-sm text-xs font-semibold uppercase tracking-widest border border-brand-gold/30 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300"
+                          className="bg-brand-dark text-brand-cream px-6 sm:px-10 py-3.5 sm:py-4 rounded-sm text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em] transition-all duration-300 shadow-[0_4px_14px_0_rgba(0,0,0,0.1)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.15)] hover:bg-brand-crimson whitespace-nowrap"
                         >
-                          <span>{slide.ctaText}</span>
-                          <ArrowRight size={14} />
+                          {slide.ctaText || 'Explore Collection'}
+                        </Link>
+                        <Link
+                          to="/shop"
+                          className="bg-brand-white/50 border border-brand-dark/20 text-brand-dark px-6 sm:px-10 py-3.5 sm:py-4 rounded-sm text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em] transition-all duration-300 hover:bg-brand-white hover:border-brand-dark/40 whitespace-nowrap backdrop-blur-sm"
+                        >
+                          View All
                         </Link>
                       </motion.div>
                     </motion.div>
@@ -327,68 +486,33 @@ export default function Home() {
                 </AnimatePresence>
               </div>
             </div>
+          );
+        })}
 
-          </div>
-        ))}
-
-        {/* Carousel controls */}
+        {/* Carousel Navigation Indicators */}
         {activeBanners.length > 1 && (
-          <>
-            <button
-              onClick={handlePrevBanner}
-              className="absolute left-6 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-brand-white/10 hover:bg-brand-white/20 text-brand-cream transition-colors duration-300"
-              aria-label="Previous slide"
-            >
-              &#10094;
-            </button>
-            <button
-              onClick={handleNextBanner}
-              className="absolute right-6 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-brand-white/10 hover:bg-brand-white/20 text-brand-cream transition-colors duration-300"
-              aria-label="Next slide"
-            >
-              &#10095;
-            </button>
-            
-            {/* Indicators */}
-            <div className="absolute bottom-6 left-0 right-0 flex justify-center space-x-3 z-30">
-              {activeBanners.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveBannerIndex(i)}
-                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                    activeBannerIndex === i ? 'bg-brand-gold w-6' : 'bg-brand-cream/40'
-                  }`}
-                  aria-label={`Go to slide ${i + 1}`}
-                />
-              ))}
-            </div>
-          </>
+          <div className="absolute bottom-4 md:bottom-8 lg:bottom-12 left-0 w-full md:w-[55%] px-4 sm:px-12 md:px-16 lg:px-32 flex justify-center md:justify-start items-center space-x-2 md:space-x-3 z-30">
+            {activeBanners.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  setActiveBannerIndex(i);
+                  setActiveThumbnailIndex(0);
+                }}
+                className={`transition-all duration-500 ease-out rounded-full ${
+                  activeBannerIndex === i ? 'w-10 h-1 bg-brand-dark' : 'w-2 h-2 bg-brand-dark/20 hover:bg-brand-dark/40'
+                }`}
+                aria-label={`Go to slide ${i + 1}`}
+              />
+            ))}
+          </div>
         )}
       </section>
 
-      {/* 1.5 TRUST STRIP BAR (Slim Premium Strip) */}
-      <section className="bg-brand-cream border-b border-brand-border/40 select-none py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-y-4 md:gap-y-0 text-center items-center justify-center divide-y md:divide-y-0 md:divide-x divide-brand-border/30">
-            <div className="flex items-center justify-center space-x-2 py-2 md:py-0 px-2">
-              <span className="text-lg">🚚</span>
-              <span className="text-xs uppercase tracking-widest font-semibold text-brand-dark/80">Free Shipping</span>
-            </div>
-            <div className="flex items-center justify-center space-x-2 py-2 md:py-0 px-2">
-              <span className="text-lg">🔄</span>
-              <span className="text-xs uppercase tracking-widest font-semibold text-brand-dark/80">Easy Returns</span>
-            </div>
-            <div className="flex items-center justify-center space-x-2 py-2 md:py-0 px-2">
-              <span className="text-lg">🔒</span>
-              <span className="text-xs uppercase tracking-widest font-semibold text-brand-dark/80">Secure Payments</span>
-            </div>
-            <div className="flex items-center justify-center space-x-2 py-2 md:py-0 px-2">
-              <span className="text-lg">⭐</span>
-              <span className="text-xs uppercase tracking-widest font-semibold text-brand-dark/80">Premium Quality</span>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Section Transition Gradient Line */}
+      <div className="w-full h-8 bg-gradient-to-b from-[#F1ECE1] to-brand-white relative overflow-hidden flex items-start justify-center">
+        <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-brand-gold/30 to-transparent mt-[-1px]"></div>
+      </div>
 
       {/* 2. CATEGORY GRID (Luxury layout) */}
       <motion.section 

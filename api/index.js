@@ -287,6 +287,8 @@ app.put('/api/admin/customers/:id/role', requireAuth, async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
 // Leads endpoints for marketing popup
 app.post('/api/leads', async (req, res) => {
   try {
@@ -331,5 +333,4 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
     console.log(`Server is running locally on port ${PORT}`);
   });
 }
-
 export default app;

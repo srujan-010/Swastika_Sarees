@@ -2,9 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingBag, FolderHeart, ListOrdered, Users, Ticket, Image,
-  MessageSquare, BarChart3, Settings, ShieldAlert, Plus, Edit, Trash2, Eye, CheckCircle2, XCircle, Upload, X, Star, Mail
+  MessageSquare, BarChart3, Settings, ShieldAlert, Plus, Edit, Trash2, Eye, CheckCircle2, XCircle, Upload, X, Star, Mail, Sparkles, Bot, Loader2, RefreshCw
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { useProductAI } from '../hooks/useProductAI';
+import { detectVariantColor } from '../services/ai/colorDetection';
+import { uploadFileWithProgress } from '../utils/uploadHelpers';
 
 // Import Recharts components for beautiful analytics
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
@@ -395,6 +398,55 @@ function DashboardView({ token }) {
   );
 }
 
+const PremiumUploadCard = ({ state, onRetry }) => {
+  if (!state) return null;
+  const { isUploading, progress, currentIndex, totalFiles, error, success, aiStatus, aiMessage } = state;
+  
+  if (!isUploading && !error && !success && aiStatus !== 'loading') return null;
+
+  return (
+    <div className="absolute inset-0 bg-brand-cream bg-opacity-95 z-20 flex flex-col items-center justify-center p-4 rounded-xl border border-brand-border backdrop-blur-sm shadow-sm transition-all duration-300">
+      {isUploading && (
+         <div className="w-full max-w-[200px] flex flex-col items-center animate-fade-in">
+            <div className="text-xs font-bold text-brand-dark mb-1 flex items-center space-x-1">
+              <Upload size={12} className="animate-bounce" />
+              <span>Uploading image {currentIndex} of {totalFiles}</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-1 mt-2 overflow-hidden shadow-inner">
+               <div className="bg-brand-crimson h-2 rounded-full transition-all duration-300 ease-out" style={{ width: `${progress}%` }}></div>
+            </div>
+            <div className="text-[10px] font-bold text-brand-gold">{progress}%</div>
+         </div>
+      )}
+      
+      {aiStatus === 'loading' && (
+         <div className="flex flex-col items-center space-y-3 animate-fade-in">
+            <div className="w-6 h-6 rounded-full border-2 border-brand-gold border-t-transparent animate-spin shadow-sm"></div>
+            <div className="text-xs font-bold text-brand-dark text-center">{aiMessage || 'Processing...'}</div>
+         </div>
+      )}
+      
+      {success && aiStatus !== 'loading' && (
+         <div className="flex flex-col items-center animate-fade-in-up">
+            <CheckCircle2 size={24} className="text-emerald-500 mb-1 drop-shadow" />
+            <div className="text-xs font-bold text-brand-dark">Images Uploaded Successfully</div>
+            {aiMessage && <div className="text-[10px] mt-1 font-semibold text-brand-gold">{aiMessage}</div>}
+         </div>
+      )}
+
+      {error && (
+         <div className="flex flex-col items-center animate-fade-in-up">
+            <XCircle size={24} className="text-red-500 mb-1" />
+            <div className="text-xs font-bold text-red-600 mb-2 text-center">{error}</div>
+            <button type="button" onClick={onRetry} className="bg-brand-dark text-brand-cream px-4 py-1.5 rounded text-[10px] font-bold tracking-wider uppercase hover:bg-brand-muted transition-colors">
+              Retry Upload
+            </button>
+         </div>
+      )}
+    </div>
+  );
+};
+
 // -----------------------
 // 2. PRODUCTS CRUD VIEW
 // -----------------------
@@ -420,6 +472,9 @@ function ProductsView({ token: tokenProp }) {
     category: '',
     description: '',
     fabric: '',
+    colorName: '',
+    colorHex: '#C8832A',
+    colorManuallyEdited: false,
     careInstructions: '',
     occasionTags: [],
     styleTags: [],
@@ -434,51 +489,205 @@ function ProductsView({ token: tokenProp }) {
     imageUrl: '', // kept for backward compat / URL fallback
     variants: [], // { colorName, colorHex, size, stock, extraPricePaise }
     subCategory: '',
+    brand: '',
+    sareeLength: '',
+    sareeWidth: '',
+    sareeWeight: '',
+    blousePiece: '',
+    blouseType: '',
+    latkan: '',
+    availability: '',
+    dispatchTime: '',
+    productVideo: '',
+    productHighlights: [],
     showSizeChart: true
   });
+  const [mainUploadState, setMainUploadState] = useState({
+    isUploading: false, progress: 0, currentIndex: 0, totalFiles: 0,
+    error: null, success: false, aiStatus: '', aiMessage: '', stagedFiles: []
+  });
+  const [supplierText, setSupplierText] = useState('');
+  const [manuallyEditedFields, setManuallyEditedFields] = useState(new Set());
+  const [confidenceScores, setConfidenceScores] = useState({});
+  const { generateDetails, loading: aiLoading, loadingStage, error: aiError, success: aiSuccess, clearState: clearAiState } = useProductAI();
+
+  const handleFieldChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setManuallyEditedFields(prev => new Set([...prev, field]));
+  };
+
+  const getFieldClass = (fieldName, baseClass) => {
+    const isLowConfidence = confidenceScores[fieldName] !== undefined && confidenceScores[fieldName] < 80;
+    return `${baseClass} ${isLowConfidence ? 'border-amber-400 ring-1 ring-amber-400/50 bg-amber-50/30' : 'border'}`;
+  };
+
+  const renderConfidenceBadge = (fieldName) => {
+    if (confidenceScores[fieldName] !== undefined && confidenceScores[fieldName] < 80) {
+      return <span className="text-3xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold border border-amber-200 ml-2 shadow-sm" title="AI confidence is low. Please review.">Verify</span>;
+    }
+    return null;
+  };
+
+  const handleGenerateAI = async (replaceExisting = false) => {
+    if (!supplierText) return;
+    
+    const result = await generateDetails(supplierText);
+    if (result && result.extracted) {
+      setConfidenceScores(result.confidence || {});
+      
+      const newFormData = { ...formData };
+      
+      if (result.extracted.categoryName && categories.length > 0) {
+        const catMatch = categories.find(c => c.name.toLowerCase() === result.extracted.categoryName.toLowerCase());
+        if (catMatch) {
+          result.extracted.category = catMatch._id;
+          
+          if (result.extracted.subCategoryName && catMatch.subCategories) {
+            const subMatch = catMatch.subCategories.find(s => s.name.toLowerCase() === result.extracted.subCategoryName.toLowerCase());
+            if (subMatch) {
+              result.extracted.subCategory = subMatch.slug;
+            }
+          }
+        }
+      }
+
+      Object.keys(result.extracted).forEach(key => {
+        if (formData.hasOwnProperty(key)) {
+          if (replaceExisting || !manuallyEditedFields.has(key)) {
+            newFormData[key] = result.extracted[key];
+          }
+        }
+      });
+      
+      setFormData(newFormData);
+      if (replaceExisting) {
+        setManuallyEditedFields(new Set());
+      }
+    }
+  };
 
   // Multi-image uploader state
   const [uploadedImages, setUploadedImages] = useState([]); // [{ url, isPrimary, displayOrder }]
   const [imageUploading, setImageUploading] = useState(false);
 
-  const handleImageFilesSelected = async (files) => {
-    if (!files || files.length === 0) return;
+  const handleImageFilesSelected = async (files, isRetry = false) => {
+    const fileArray = isRetry ? mainUploadState.stagedFiles : (files ? Array.from(files) : []);
+    if (!fileArray || fileArray.length === 0) return;
+    
     setImageUploading(true);
+    setMainUploadState({
+      isUploading: true, progress: 0, currentIndex: 1, totalFiles: fileArray.length,
+      error: null, success: false, aiStatus: '', aiMessage: '', stagedFiles: fileArray
+    });
+
     const freshToken = useAuthStore.getState().token;
+    const newImageUrls = [];
+    
     try {
-      const formPayload = new FormData();
-      Array.from(files).forEach(f => formPayload.append('images', f));
-      const res = await fetch('/api/upload/multiple', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${freshToken}` },
-        body: formPayload
-      });
-      const data = await res.json();
-      if (res.ok && data.images) {
+      for (let i = 0; i < fileArray.length; i++) {
+        setMainUploadState(p => ({ ...p, currentIndex: i + 1, progress: 0 }));
+        const mainFolderPath = `products/${formData.slug || 'draft'}/main`;
+        const data = await uploadFileWithProgress(fileArray[i], freshToken, (pct) => {
+          setMainUploadState(p => ({ ...p, progress: pct }));
+        }, mainFolderPath);
+        
+        console.log('[DEBUG] Cloudinary Upload Response:', data); // Added log
+        newImageUrls.push(data.url);
+        
         setUploadedImages(prev => {
-          const next = [
-            ...prev,
-            ...data.images.map((img, i) => ({
-              url: img.url,
-              isPrimary: prev.length === 0 && i === 0,
-              displayOrder: prev.length + i
-            }))
-          ];
+          // If we already have images, none of the new ones should be forced primary
+          // unless the previous length was 0.
+          const isPrimary = prev.length === 0 && i === 0;
+          const next = [...prev, {
+            url: data.url,
+            isPrimary: isPrimary,
+            displayOrder: prev.length + i
+          }];
+          console.log('[DEBUG] Added to mainProduct uploadedImages state:', next);
           return next;
         });
-      } else {
-        alert(data.error || 'Upload failed');
       }
+      
+      setMainUploadState(p => ({ ...p, isUploading: false, success: true }));
+      setImageUploading(false);
+      
+      triggerMainColorDetection(newImageUrls);
+      
+      setTimeout(() => {
+        setMainUploadState(p => {
+           if (p.aiStatus) return p;
+           return { ...p, success: false };
+        });
+      }, 2500);
+
     } catch (e) {
       console.error(e);
-      alert('Upload failed due to network error');
-    } finally {
+      setMainUploadState(p => ({ ...p, isUploading: false, error: e.message || 'Upload failed' }));
       setImageUploading(false);
     }
   };
 
+  const triggerMainColorDetection = async (imageUrls) => {
+    if (formData.colorManuallyEdited) return;
+    
+    setMainUploadState(p => ({ ...p, aiStatus: 'loading', aiMessage: '🧠 Analyzing Saree Images...' }));
+    
+    const msgs = ['🧠 Analyzing Saree Images...', '🎨 Detecting Primary Color...', '🪡 Identifying Saree Fabric...', '🏷 Generating Color Name...'];
+    let step = 0;
+    const interval = setInterval(() => {
+       step = (step + 1) % msgs.length;
+       setMainUploadState(p => p.aiStatus === 'loading' ? { ...p, aiMessage: msgs[step] } : p);
+    }, 1500);
+    
+    try {
+      const result = await detectVariantColor(imageUrls);
+      clearInterval(interval);
+      
+      setFormData(prev => {
+         if (prev.colorManuallyEdited) {
+            setMainUploadState(p => ({ ...p, aiStatus: 'warning', aiMessage: 'AI Skipped - Color Manually Edited' }));
+            return prev;
+         }
+         return { ...prev, colorName: result.primaryColor, colorHex: result.hex };
+      });
+      
+      if (!formData.colorManuallyEdited) {
+        setMainUploadState(p => ({ 
+          ...p, 
+          aiStatus: 'success', 
+          aiMessage: `🟣 AI Detected Color: ${result.primaryColor} (${result.confidence}%)` 
+        }));
+      }
+      
+      setTimeout(() => {
+        setMainUploadState(p => ({ ...p, aiStatus: '', success: false }));
+      }, 3000);
+      
+    } catch (e) {
+      clearInterval(interval);
+      console.error(e);
+      setMainUploadState(p => ({ ...p, aiStatus: 'error', aiMessage: '❌ Color detection failed.' }));
+      setTimeout(() => {
+        setMainUploadState(p => ({ ...p, aiStatus: '', success: false }));
+      }, 3000);
+    }
+  };
+
+  const sortImages = (images) => {
+    return [...images].sort((a, b) => {
+      if (a.isPrimary && !b.isPrimary) return -1;
+      if (!a.isPrimary && b.isPrimary) return 1;
+      const orderA = a.displayOrder !== undefined ? a.displayOrder : 9999;
+      const orderB = b.displayOrder !== undefined ? b.displayOrder : 9999;
+      return orderA - orderB;
+    }).map((img, i) => ({ ...img, displayOrder: i }));
+  };
+
   const setPrimaryImage = (idx) => {
-    setUploadedImages(prev => prev.map((img, i) => ({ ...img, isPrimary: i === idx })));
+    setUploadedImages(prev => {
+      const updated = prev.map((img, i) => ({ ...img, isPrimary: i === idx }));
+      return sortImages(updated);
+    });
   };
 
   const removeUploadedImage = (idx) => {
@@ -577,6 +786,7 @@ function ProductsView({ token: tokenProp }) {
       name: val,
       slug: val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
     }));
+    setManuallyEditedFields(prev => new Set([...prev, 'name', 'slug']));
   };
 
 
@@ -584,7 +794,7 @@ function ProductsView({ token: tokenProp }) {
   const addVariantRow = () => {
     setFormData(prev => ({
       ...prev,
-      variants: [...prev.variants, { colorName: '', colorHex: '#C8832A', size: 'Free Size', stock: 10, extraPricePaise: 0 }]
+      variants: [...prev.variants, { colorName: '', colorHex: '#C8832A', size: 'Free Size', stock: 10, extraPricePaise: 0, variantSku: '', availability: '', video: '', images: [], colorManuallyEdited: false, aiColorStatus: '', aiColorMessage: '', uploadState: { isUploading: false, progress: 0, currentIndex: 0, totalFiles: 0, error: null, success: false, aiStatus: '', aiMessage: '', stagedFiles: [] } }]
     }));
   };
 
@@ -598,7 +808,173 @@ function ProductsView({ token: tokenProp }) {
   const handleVariantChange = (idx, field, value) => {
     setFormData(prev => {
       const list = [...prev.variants];
-      list[idx] = { ...list[idx], [field]: value };
+      const variant = list[idx] || {};
+      
+      const updates = { [field]: value };
+      if (field === 'colorName' || field === 'colorHex') {
+        updates.colorManuallyEdited = true;
+      }
+      
+      list[idx] = { ...variant, ...updates };
+      return { ...prev, variants: list };
+    });
+  };
+
+  const setVariantUploadState = (idx, updates) => {
+    setFormData(prev => {
+       const list = [...prev.variants];
+       if (!list[idx]) return prev;
+       list[idx].uploadState = { ...(list[idx].uploadState || {}), ...updates };
+       return { ...prev, variants: list };
+    });
+  };
+
+  const triggerVariantColorDetection = async (idx, imageUrls) => {
+    if (formData.variants[idx]?.colorManuallyEdited) {
+       return;
+    }
+    
+    setVariantUploadState(idx, { aiStatus: 'loading', aiMessage: '🧠 Analyzing Saree Images...' });
+    
+    const msgs = ['🧠 Analyzing Saree Images...', '🎨 Detecting Primary Color...', '🪡 Identifying Saree Fabric...', '🏷 Generating Color Name...'];
+    let step = 0;
+    const interval = setInterval(() => {
+       step = (step + 1) % msgs.length;
+       setFormData(prev => {
+          const list = [...prev.variants];
+          if (list[idx] && list[idx].uploadState?.aiStatus === 'loading') {
+            list[idx].uploadState.aiMessage = msgs[step];
+          }
+          return { ...prev, variants: list };
+       });
+    }, 1500);
+    
+    try {
+       const result = await detectVariantColor(imageUrls);
+       clearInterval(interval);
+       
+       setFormData(prev => {
+          const list = [...prev.variants];
+          const currentVariant = list[idx];
+          if (!currentVariant) return prev;
+          
+          if (currentVariant.colorManuallyEdited) {
+             currentVariant.uploadState.aiStatus = 'warning';
+             currentVariant.uploadState.aiMessage = 'AI Skipped - Color Manually Edited';
+             return { ...prev, variants: list };
+          }
+          
+          currentVariant.colorName = result.primaryColor;
+          currentVariant.colorHex = result.hex;
+          currentVariant.uploadState.aiStatus = 'success';
+          currentVariant.uploadState.aiMessage = `🟣 AI Detected Color: ${result.primaryColor} (${result.confidence}%)`;
+          
+          return { ...prev, variants: list };
+       });
+       
+       setTimeout(() => {
+          setVariantUploadState(idx, { aiStatus: '', success: false });
+       }, 3000);
+       
+    } catch (error) {
+       clearInterval(interval);
+       console.error('Color detection failed:', error);
+       setVariantUploadState(idx, { aiStatus: 'error', aiMessage: '❌ Color detection failed.' });
+       setTimeout(() => {
+          setVariantUploadState(idx, { aiStatus: '', success: false });
+       }, 3000);
+    }
+  };
+
+  const handleVariantImageUpload = async (idx, files, isRetry = false) => {
+    const currentVariant = formData.variants[idx];
+    const fileArray = isRetry ? currentVariant.uploadState?.stagedFiles : (files ? Array.from(files) : []);
+    if (!fileArray || fileArray.length === 0) return;
+    
+    setVariantUploadState(idx, {
+      isUploading: true, progress: 0, currentIndex: 1, totalFiles: fileArray.length,
+      error: null, success: false, aiStatus: '', aiMessage: '', stagedFiles: fileArray
+    });
+
+    const freshToken = useAuthStore.getState().token;
+    const newImageUrls = [];
+    
+    try {
+      for (let i = 0; i < fileArray.length; i++) {
+         setVariantUploadState(idx, { currentIndex: i + 1, progress: 0 });
+         const variantColor = formData.variants[idx]?.colorName || `variant_${idx}`;
+         const variantFolderPath = `products/${formData.slug || 'draft'}/variants/${variantColor}`;
+         const data = await uploadFileWithProgress(fileArray[i], freshToken, (pct) => {
+           setVariantUploadState(idx, { progress: pct });
+         }, variantFolderPath);
+         
+         newImageUrls.push(data.url);
+         
+         setFormData(prev => {
+            const list = [...prev.variants];
+            const currentVariant = list[idx] || { images: [] };
+            const existingImages = currentVariant.images || [];
+            
+            // Prevent duplicates
+            if (existingImages.some(img => img.url === data.url)) {
+               return prev;
+            }
+            
+            const isPrimary = existingImages.length === 0 && i === 0;
+            const newImageObj = {
+               url: data.url,
+               isPrimary: isPrimary,
+               displayOrder: existingImages.length + i
+            };
+
+            list[idx] = {
+               ...currentVariant,
+               images: [...existingImages, newImageObj]
+            };
+            
+            return { ...prev, variants: list };
+         });
+      }
+      
+      setVariantUploadState(idx, { isUploading: false, success: true });
+      
+      triggerVariantColorDetection(idx, newImageUrls);
+      
+      setTimeout(() => {
+        setFormData(prev => {
+           const list = [...prev.variants];
+           if (list[idx] && !list[idx].uploadState?.aiStatus) {
+              list[idx].uploadState.success = false;
+           }
+           return { ...prev, variants: list };
+        });
+      }, 2500);
+      
+    } catch (e) {
+      console.error(e);
+      setVariantUploadState(idx, { isUploading: false, error: e.message || 'Upload failed' });
+    }
+  };
+
+  const setVariantPrimaryImage = (vIdx, imgIdx) => {
+    setFormData(prev => {
+      const list = [...prev.variants];
+      if (list[vIdx] && list[vIdx].images) {
+         const updated = list[vIdx].images.map((img, i) => ({ ...img, isPrimary: i === imgIdx }));
+         list[vIdx].images = sortImages(updated);
+      }
+      return { ...prev, variants: list };
+    });
+  };
+
+  const removeVariantImage = (vIdx, imgIdx) => {
+    setFormData(prev => {
+      const list = [...prev.variants];
+      if (list[vIdx] && list[vIdx].images) {
+        let newImages = list[vIdx].images.filter((_, i) => i !== imgIdx).map((img, i) => ({ ...img, displayOrder: i }));
+        if (newImages.length > 0 && !newImages.some(i => i.isPrimary)) newImages[0].isPrimary = true;
+        list[vIdx].images = newImages;
+      }
       return { ...prev, variants: list };
     });
   };
@@ -623,14 +999,38 @@ function ProductsView({ token: tokenProp }) {
       return;
     }
     
+    // Validation: Variant must have a color
+    if (formData.variants && formData.variants.length > 0) {
+      for (let i = 0; i < formData.variants.length; i++) {
+        const v = formData.variants[i];
+        if (!v.colorName) {
+          alert(`Variant #${i + 1} is missing a Color Name. All variants must have a color.`);
+          return;
+        }
+      }
+    }
+    
     const body = {
       ...formData,
-      images: imagesPayload,
-      variants: formData.variants.map(v => ({
-        ...v,
-        extraPricePaise: Math.round(parseFloat(v.extraPricePaise || 0) * 100)
-      }))
+      images: imagesPayload, // Legacy fallback
+      mainProduct: {
+        primaryColor: { name: formData.colorName, hex: formData.colorHex },
+        images: imagesPayload,
+        primaryImage: imagesPayload.find(i => i.isPrimary)?.url || imagesPayload[0]?.url || '',
+        video: formData.productVideo || ''
+      },
+      variants: formData.variants.map(v => {
+        // Find the primary variant image
+        const variantPrimaryImage = v.images?.find(i => i.isPrimary)?.url || v.images?.[0]?.url || '';
+        return {
+          ...v,
+          primaryImage: variantPrimaryImage,
+          extraPricePaise: Math.round(parseFloat(v.extraPricePaise || 0) * 100)
+        };
+      })
     };
+
+    console.log('[DEBUG] Exact Payload Before Saving:', JSON.stringify(body, null, 2)); // Added log
 
     const method = editingProduct ? 'PUT' : 'POST';
     const endpoint = editingProduct ? `/api/products/${editingProduct._id}` : '/api/products';
@@ -662,12 +1062,26 @@ function ProductsView({ token: tokenProp }) {
 
   const handleEditProductClick = (prod) => {
     setEditingProduct(prod);
-    // Pre-populate uploadedImages from existing product images
-    const existingImages = (prod.images || []).map((img, i) => ({
-      url: img.url,
-      isPrimary: img.isPrimary || i === 0,
-      displayOrder: img.displayOrder || i
-    }));
+    // Pre-populate uploadedImages from existing product images (prefer mainProduct if available)
+    const sourceImages = prod.mainProduct?.images || prod.images || [];
+    
+    let mainPrimaryFound = false;
+    const existingImages = sourceImages.map((img, i) => {
+      let isPrimary = false;
+      if (img.isPrimary && !mainPrimaryFound) {
+        isPrimary = true;
+        mainPrimaryFound = true;
+      }
+      return {
+        url: img.url,
+        isPrimary: isPrimary,
+        displayOrder: img.displayOrder || i
+      };
+    });
+    if (!mainPrimaryFound && existingImages.length > 0) {
+      existingImages[0].isPrimary = true;
+    }
+
     setUploadedImages(existingImages);
     setFormData({
       name: prod.name,
@@ -686,14 +1100,64 @@ function ProductsView({ token: tokenProp }) {
       isFeatured: prod.isFeatured || false,
       isBestseller: prod.isBestseller || false,
       isNewArrival: prod.isNewArrival || false,
-      imageUrl: prod.images?.[0]?.url || '',
-      variants: prod.variants?.map(v => ({
-        ...v,
-        extraPricePaise: (v.extraPricePaise / 100).toString()
-      })) || [],
+      
+      // Attempt to load from mainProduct first, then fallback to legacy flat fields
+      imageUrl: prod.mainProduct?.images?.[0]?.url || prod.images?.[0]?.url || '',
+      colorName: prod.mainProduct?.primaryColor?.name || prod.colorName || '',
+      colorHex: prod.mainProduct?.primaryColor?.hex || prod.colorHex || '#000000',
+      variants: prod.variants?.map(v => {
+        let variantPrimaryFound = false;
+        const sanitizedImages = (v.images || []).map((img, i) => {
+          let isPrimary = false;
+          if (img.isPrimary && !variantPrimaryFound) {
+            isPrimary = true;
+            variantPrimaryFound = true;
+          }
+          return {
+             url: img.url,
+             isPrimary: isPrimary,
+             displayOrder: img.displayOrder || i
+          };
+        });
+        if (!variantPrimaryFound && sanitizedImages.length > 0) {
+          sanitizedImages[0].isPrimary = true;
+        }
+        
+        return {
+          ...v,
+          extraPricePaise: (v.extraPricePaise / 100).toString(),
+          images: sanitizedImages,
+          uploadState: v.colorName ? { aiStatus: 'success', aiMessage: `Retrieved color: ${v.colorName}` } : {}
+        };
+      }) || [],
       subCategory: prod.subCategory || '',
+      brand: prod.brand || '',
+      sareeLength: prod.sareeLength || '',
+      sareeWidth: prod.sareeWidth || '',
+      sareeWeight: prod.sareeWeight || '',
+      blousePiece: prod.blousePiece || '',
+      blouseType: prod.blouseType || '',
+      latkan: prod.latkan || '',
+      availability: prod.availability || '',
+      dispatchTime: prod.dispatchTime || '',
+      productVideo: prod.productVideo || '',
+      productHighlights: prod.productHighlights || [],
       showSizeChart: prod.showSizeChart !== false
     });
+    setSupplierText('');
+    setManuallyEditedFields(new Set());
+    setConfidenceScores({});
+    clearAiState();
+    
+    // Restore AI Status badge if color exists
+    if (prod.colorName) {
+       setMainUploadState(prev => ({
+          ...prev,
+          aiStatus: 'success',
+          aiMessage: `Retrieved color: ${prod.colorName}`
+       }));
+    }
+    
     setFormOpen(true);
   };
 
@@ -749,8 +1213,13 @@ function ProductsView({ token: tokenProp }) {
               setFormData({
                 name: '', slug: '', category: categories[0]?._id || '', subCategory: '', description: '', fabric: '', careInstructions: '',
                 occasionTags: [], styleTags: [], price: '', originalPrice: '', stock: '10', sku: '', isActive: true,
-                isFeatured: false, isBestseller: false, isNewArrival: false, imageUrl: '', variants: [], showSizeChart: true
+                isFeatured: false, isBestseller: false, isNewArrival: false, imageUrl: '', variants: [],
+                brand: '', sareeLength: '', sareeWidth: '', sareeWeight: '', blousePiece: '', blouseType: '', latkan: '', availability: '', dispatchTime: '', productVideo: '', productHighlights: [], showSizeChart: true
               });
+              setSupplierText('');
+              setManuallyEditedFields(new Set());
+              setConfidenceScores({});
+              clearAiState();
               setFormOpen(true);
             }}
             className="flex items-center space-x-1.5 bg-brand-crimson hover:bg-brand-muted text-brand-cream text-xs font-semibold px-4 py-2 rounded-lg border border-brand-gold/30 shadow-md"
@@ -763,311 +1232,566 @@ function ProductsView({ token: tokenProp }) {
 
       {/* CRUD Add/Edit Form */}
       {formOpen ? (
-        <form onSubmit={handleFormSubmit} className="bg-brand-white border border-brand-border p-6 rounded-2xl shadow-md space-y-6 max-w-4xl font-sans text-xs">
-          <h3 className="font-display font-bold text-brand-dark text-base">{editingProduct ? `Edit Product: ${editingProduct.name}` : 'New Product Registration'}</h3>
+        <form onSubmit={handleFormSubmit} className="relative space-y-6 max-w-5xl font-sans text-xs pb-24">
+          <div className="flex justify-between items-center bg-brand-white border border-brand-border p-4 rounded-xl shadow-sm">
+             <h3 className="font-display font-bold text-brand-dark text-base">{editingProduct ? `Edit Product: ${editingProduct.name}` : 'New Product Registration'}</h3>
+          </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {/* ✨ AI Product Assistant Card */}
+          <div className="flex flex-col space-y-4 bg-gradient-to-br from-brand-gold/10 to-brand-cream/40 p-5 rounded-xl border border-brand-gold/30 shadow-sm relative overflow-hidden">
+            <div className="flex items-center space-x-2 border-b border-brand-gold/20 pb-2">
+              <Sparkles className="text-brand-gold" size={18} />
+              <span className="font-display font-bold text-brand-dark text-sm tracking-wide">AI Product Assistant</span>
+            </div>
+            
+            <textarea 
+              value={supplierText} 
+              onChange={e => setSupplierText(e.target.value)} 
+              rows={4} 
+              placeholder="Paste supplier message here..." 
+              className="bg-brand-white border border-brand-border/60 p-3 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-gold font-mono text-[11px] resize-y" 
+            />
+            
+            <div className="flex flex-wrap gap-2 items-center justify-between">
+              <div className="flex space-x-2">
+                <button 
+                  type="button" 
+                  onClick={handleGenerateAI} 
+                  disabled={aiLoading || !supplierText.trim()}
+                  className="flex items-center space-x-1.5 bg-brand-dark hover:bg-brand-muted text-brand-cream px-4 py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
+                  <span>{aiLoading ? 'Analyzing...' : 'Auto-Fill Details'}</span>
+                </button>
+                <button 
+                  type="button" 
+                  onClick={clearAiState}
+                  disabled={aiLoading}
+                  className="flex items-center space-x-1 border border-brand-border hover:bg-brand-cream text-brand-dark px-3 py-2 rounded-lg font-semibold transition-colors disabled:opacity-50"
+                  title="Clear all AI generated data"
+                >
+                  <RefreshCw size={12} />
+                  <span>Reset Form</span>
+                </button>
+              </div>
+
+              {aiError && <span className="text-brand-crimson text-xs font-semibold animate-pulse">{aiError}</span>}
+              {aiSuccess && (
+                <div className="flex items-center space-x-1.5 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-md border border-emerald-200">
+                  <CheckCircle2 size={14} />
+                  <span>Product Details Generated Successfully</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-6">
             
             {/* Sec 1: Basic info */}
-            <div className="space-y-4">
-              <span className="block text-xs font-bold text-brand-gold uppercase tracking-wider border-b pb-1">Basic Info</span>
+            <div className="bg-brand-white border border-brand-border p-6 rounded-2xl shadow-sm space-y-4">
+              <span className="block text-sm font-display font-bold text-brand-dark border-b pb-2 mb-4">Basic Information</span>
               
-              <div className="flex flex-col">
-                <label className="font-semibold text-brand-dark mb-1">Product Name *</label>
-                <input type="text" value={formData.name} onChange={handleNameChange} className="bg-brand-cream border px-3 py-2 rounded-md focus:outline-none" required />
-              </div>
-              <div className="flex flex-col">
-                <label className="font-semibold text-brand-dark mb-1">URL Slug (Auto generated)</label>
-                <input type="text" value={formData.slug} onChange={(e) => setFormData({ ...formData, slug: e.target.value })} className="bg-brand-cream border px-3 py-2 rounded-md focus:outline-none text-brand-muted" required />
-              </div>
-              <div className="flex flex-col">
-                <label className="font-semibold text-brand-dark mb-1">Category *</label>
-                <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value, subCategory: '' })} className="bg-brand-cream border px-3 py-2 rounded-md focus:outline-none cursor-pointer" required>
-                  <option value="">Choose category</option>
-                  {categories.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
-                </select>
-              </div>
-              
-              {(() => {
-                const selectedCatObj = categories.find(c => c._id === formData.category);
-                const subCats = selectedCatObj?.subCategories || [];
-                if (subCats.length > 0) {
-                  return (
-                    <div className="flex flex-col">
-                      <label className="font-semibold text-brand-dark mb-1">Sub-category</label>
-                      <select
-                        value={formData.subCategory}
-                        onChange={(e) => setFormData({ ...formData, subCategory: e.target.value })}
-                        className="bg-brand-cream border px-3 py-2 rounded-md focus:outline-none cursor-pointer text-xs"
-                      >
-                        <option value="">-- Choose Sub-category --</option>
-                        {subCats.map(sub => (
-                          <option key={sub.slug} value={sub.slug}>{sub.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-              
-              <div className="flex flex-col relative">
-                <div className="flex justify-between items-center mb-1">
-                  <label className="font-semibold text-brand-dark">Description</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Product Name * {renderConfidenceBadge('name')}</label>
+                  <input type="text" value={formData.name} onChange={handleNameChange} className={getFieldClass('name', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none")} required />
                 </div>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={6}
-                  placeholder="Rich HTML description..."
-                  className="bg-brand-cream border p-3 rounded-md focus:outline-none font-mono text-[11px]"
-                />
-              </div>
 
-              <div className="flex flex-col">
-                <label className="font-semibold text-brand-dark mb-1">Fabric details</label>
-                <input type="text" value={formData.fabric} onChange={(e) => setFormData({ ...formData, fabric: e.target.value })} placeholder="e.g. Banarasi Silk" className="bg-brand-cream border px-3 py-2 rounded-md focus:outline-none" />
-              </div>
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Brand * {renderConfidenceBadge('brand')}</label>
+                  <input type="text" value={formData.brand} onChange={(e) => handleFieldChange('brand', e.target.value)} placeholder="e.g. Ajrakh" className={getFieldClass('brand', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none")} required />
+                </div>
+                
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Category * {renderConfidenceBadge('category')}</label>
+                  <select value={formData.category} onChange={(e) => { handleFieldChange('category', e.target.value); handleFieldChange('subCategory', ''); }} className={getFieldClass('category', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none cursor-pointer")} required>
+                    <option value="">Choose category</option>
+                    {categories.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+                  </select>
+                </div>
+                
+                {(() => {
+                  const selectedCatObj = categories.find(c => c._id === formData.category);
+                  const subCats = selectedCatObj?.subCategories || [];
+                  return (
+                      <div className="flex flex-col">
+                        <label className="font-semibold text-brand-dark mb-1 flex items-center">Sub-category {renderConfidenceBadge('subCategory')}</label>
+                        <select
+                          value={formData.subCategory}
+                          onChange={(e) => handleFieldChange('subCategory', e.target.value)}
+                          className={getFieldClass('subCategory', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none cursor-pointer text-xs")}
+                          disabled={subCats.length === 0}
+                        >
+                          <option value="">-- Choose Sub-category --</option>
+                          {subCats.map(sub => (
+                            <option key={sub.slug} value={sub.slug}>{sub.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                  );
+                })()}
 
-              <div className="flex flex-col">
-                <label className="font-semibold text-brand-dark mb-1">Care Instructions</label>
-                <textarea value={formData.careInstructions} onChange={(e) => setFormData({ ...formData, careInstructions: e.target.value })} placeholder="Dry clean only" className="bg-brand-cream border p-2.5 rounded-md focus:outline-none" />
+                <div className="flex flex-col col-span-1 sm:col-span-2">
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="font-semibold text-brand-dark flex items-center">Description {renderConfidenceBadge('description')}</label>
+                  </div>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => handleFieldChange('description', e.target.value)}
+                    rows={4}
+                    placeholder="Rich HTML description..."
+                    className={getFieldClass('description', "bg-brand-cream p-3 rounded-md focus:outline-none font-mono text-[11px]")}
+                  />
+                </div>
+
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Fabric details {renderConfidenceBadge('fabric')}</label>
+                  <input type="text" value={formData.fabric} onChange={(e) => handleFieldChange('fabric', e.target.value)} placeholder="e.g. Banarasi Silk" className={getFieldClass('fabric', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none")} />
+                </div>
+
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1">Care Instructions</label>
+                  <input type="text" value={formData.careInstructions} onChange={(e) => handleFieldChange('careInstructions', e.target.value)} placeholder="Dry clean only" className="bg-brand-cream px-3 py-2 rounded-md focus:outline-none" />
+                </div>
               </div>
             </div>
 
             {/* Sec 2: Numbers & status */}
-            <div className="space-y-4">
-              <span className="block text-xs font-bold text-brand-gold uppercase tracking-wider border-b pb-1">Price & Inventory</span>
+            <div className="bg-brand-white border border-brand-border p-6 rounded-2xl shadow-sm space-y-4">
+              <span className="block text-sm font-display font-bold text-brand-dark border-b pb-2 mb-4">Pricing & Inventory</span>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
                 <div className="flex flex-col">
-                  <label className="font-semibold text-brand-dark mb-1">Price (₹) *</label>
-                  <input type="number" step="0.01" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="bg-brand-cream border px-3 py-2 rounded-md" required />
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Price (₹) * {renderConfidenceBadge('price')}</label>
+                  <input type="number" step="0.01" value={formData.price} onChange={(e) => handleFieldChange('price', e.target.value)} className={getFieldClass('price', "bg-brand-cream px-3 py-2 rounded-md")} required />
                 </div>
                 <div className="flex flex-col">
-                  <label className="font-semibold text-brand-dark mb-1">Original Price (₹)</label>
-                  <input type="number" step="0.01" value={formData.originalPrice} onChange={(e) => setFormData({ ...formData, originalPrice: e.target.value })} className="bg-brand-cream border px-3 py-2 rounded-md" />
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Original Price (₹) {renderConfidenceBadge('originalPrice')}</label>
+                  <input type="number" step="0.01" value={formData.originalPrice} onChange={(e) => handleFieldChange('originalPrice', e.target.value)} className={getFieldClass('originalPrice', "bg-brand-cream px-3 py-2 rounded-md")} />
                 </div>
                 <div className="flex flex-col">
-                  <label className="font-semibold text-brand-dark mb-1">Total Stock *</label>
-                  <input type="number" value={formData.stock} onChange={(e) => setFormData({ ...formData, stock: e.target.value })} className="bg-brand-cream border px-3 py-2 rounded-md" required />
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Total Stock * {renderConfidenceBadge('stock')}</label>
+                  <input type="number" value={formData.stock} onChange={(e) => handleFieldChange('stock', e.target.value)} className={getFieldClass('stock', "bg-brand-cream px-3 py-2 rounded-md")} required />
                 </div>
                 <div className="flex flex-col">
-                  <label className="font-semibold text-brand-dark mb-1">Product SKU</label>
-                  <input type="text" value={formData.sku} onChange={(e) => setFormData({ ...formData, sku: e.target.value })} placeholder="SKU-CODE" className="bg-brand-cream border px-3 py-2 rounded-md" />
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Product SKU {renderConfidenceBadge('sku')}</label>
+                  <input type="text" value={formData.sku} onChange={(e) => handleFieldChange('sku', e.target.value)} placeholder="SKU-CODE" className={getFieldClass('sku', "bg-brand-cream px-3 py-2 rounded-md")} />
+                </div>
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Availability {renderConfidenceBadge('availability')}</label>
+                  <select value={formData.availability} onChange={(e) => handleFieldChange('availability', e.target.value)} className={getFieldClass('availability', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none cursor-pointer")}>
+                    <option value="">Select Status</option>
+                    <option value="Single Ready">Single Ready</option>
+                    <option value="Bulk Ready">Bulk Ready</option>
+                    <option value="Single & Bulk Ready">Single & Bulk Ready</option>
+                    <option value="Made To Order">Made To Order</option>
+                    <option value="Pre Order">Pre Order</option>
+                  </select>
+                </div>
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Dispatch Time {renderConfidenceBadge('dispatchTime')}</label>
+                  <select value={formData.dispatchTime} onChange={(e) => handleFieldChange('dispatchTime', e.target.value)} className={getFieldClass('dispatchTime', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none cursor-pointer")}>
+                    <option value="">Select Dispatch Time</option>
+                    <option value="Ships in 24 Hours">Ships in 24 Hours</option>
+                    <option value="Ships in 2 Days">Ships in 2 Days</option>
+                    <option value="Ships in 3 Days">Ships in 3 Days</option>
+                    <option value="Ships in 5 Days">Ships in 5 Days</option>
+                    <option value="Made To Order">Made To Order</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Saree Specifications Section */}
+            <div className="bg-brand-white border border-brand-border p-6 rounded-2xl shadow-sm space-y-4">
+              <span className="block text-sm font-display font-bold text-brand-dark border-b pb-2 mb-4">Specifications</span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Saree Length {renderConfidenceBadge('sareeLength')}</label>
+                  <input type="text" value={formData.sareeLength} onChange={(e) => handleFieldChange('sareeLength', e.target.value)} placeholder="e.g. 6.30 Meters" className={getFieldClass('sareeLength', "bg-brand-cream px-3 py-2 rounded-md")} />
+                </div>
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Saree Width {renderConfidenceBadge('sareeWidth')}</label>
+                  <input type="text" value={formData.sareeWidth} onChange={(e) => handleFieldChange('sareeWidth', e.target.value)} placeholder="e.g. 48 Inches" className={getFieldClass('sareeWidth', "bg-brand-cream px-3 py-2 rounded-md")} />
+                </div>
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Saree Weight {renderConfidenceBadge('sareeWeight')}</label>
+                  <input type="text" value={formData.sareeWeight} onChange={(e) => handleFieldChange('sareeWeight', e.target.value)} placeholder="e.g. 480 Grams" className={getFieldClass('sareeWeight', "bg-brand-cream px-3 py-2 rounded-md")} />
+                </div>
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Blouse Piece {renderConfidenceBadge('blousePiece')}</label>
+                  <select value={formData.blousePiece} onChange={(e) => handleFieldChange('blousePiece', e.target.value)} className={getFieldClass('blousePiece', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none cursor-pointer")}>
+                    <option value="">Select Option</option>
+                    <option value="Included">Included</option>
+                    <option value="Not Included">Not Included</option>
+                  </select>
+                </div>
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Blouse Type {renderConfidenceBadge('blouseType')}</label>
+                  <select value={formData.blouseType} onChange={(e) => handleFieldChange('blouseType', e.target.value)} className={getFieldClass('blouseType', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none cursor-pointer")}>
+                    <option value="">Select Type</option>
+                    <option value="Running Blouse">Running Blouse</option>
+                    <option value="Separate Blouse Piece">Separate Blouse Piece</option>
+                    <option value="Designer Blouse">Designer Blouse</option>
+                    <option value="Plain Blouse">Plain Blouse</option>
+                    <option value="Not Applicable">Not Applicable</option>
+                  </select>
+                </div>
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Latkan {renderConfidenceBadge('latkan')}</label>
+                  <select value={formData.latkan} onChange={(e) => handleFieldChange('latkan', e.target.value)} className={getFieldClass('latkan', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none cursor-pointer")}>
+                    <option value="">Select Option</option>
+                    <option value="Included">Included</option>
+                    <option value="Not Included">Not Included</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Main Product Media */}
+            <div className="bg-brand-white border border-brand-border p-6 rounded-2xl shadow-sm space-y-6">
+              <span className="block text-sm font-display font-bold text-brand-dark border-b pb-2 mb-4">Main Product Media</span>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Image Upload Area */}
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-2">Product Images *</label>
+                  <div className="relative">
+                    <PremiumUploadCard state={mainUploadState} onRetry={() => handleImageFilesSelected(null, true)} />
+                    <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 cursor-pointer transition-colors select-none ${
+                      imageUploading ? 'border-brand-gold/40 bg-brand-gold/5' : 'border-brand-border hover:border-brand-crimson/50 hover:bg-brand-crimson/5'
+                    }`}>
+                      <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleImageFilesSelected(e.target.files)} disabled={imageUploading} />
+                      {imageUploading ? (
+                        <><div className="w-6 h-6 border-2 border-brand-crimson border-t-transparent rounded-full animate-spin mb-2" />
+                        <span className="text-xs text-brand-muted">Uploading to Cloudinary…</span></>
+                      ) : (
+                        <><Upload size={20} className="text-brand-muted mb-2" />
+                        <span className="text-xs font-semibold text-brand-dark">Click or drag to upload images</span>
+                        <span className="text-3xs text-brand-muted mt-1">Multiple files allowed</span></>
+                      )}
+                    </label>
+                  </div>
+                  
+                  {/* Uploaded images gallery */}
+                  {uploadedImages.length > 0 && (
+                    <div className="mt-4 bg-brand-cream/30 p-4 rounded-xl border border-brand-border/40">
+                      <p className="text-[10px] font-semibold text-brand-dark uppercase tracking-wider mb-3">Main Gallery ({uploadedImages.length})</p>
+                      <div className="flex flex-wrap gap-3">
+                        {uploadedImages.map((img, i) => (
+                          <div key={i} className={`relative group rounded-lg overflow-hidden border-2 transition-all ${
+                            img.isPrimary ? 'border-brand-crimson shadow-md' : 'border-brand-border hover:border-brand-gold'
+                          }`} style={{ width: 80, height: 106 }}>
+                            <img src={img.url} alt="" className="w-full h-full object-cover object-top" />
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                              {!img.isPrimary && (
+                                <button type="button" onClick={() => setPrimaryImage(i)} className="px-2 py-1 rounded bg-brand-gold text-white text-[10px] font-bold shadow-sm" title="Set as primary">Set Primary</button>
+                              )}
+                              <button type="button" onClick={() => removeUploadedImage(i)} className="p-1.5 rounded-full bg-brand-crimson text-white shadow-sm" title="Remove"><X size={12} /></button>
+                            </div>
+                            {img.isPrimary && (
+                              <span className="absolute bottom-0 left-0 right-0 bg-brand-crimson text-white text-[9px] font-bold tracking-wider text-center py-0.5">PRIMARY ★</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Color & Video Area */}
+                <div className="flex flex-col space-y-6">
+                  <div className="flex flex-col bg-brand-cream/20 p-5 rounded-xl border border-brand-border">
+                    <div className="flex items-center justify-between mb-3">
+                       <label className="font-semibold text-brand-dark flex items-center">Primary Product Color</label>
+                       {mainUploadState.aiStatus && (
+                         <div className={`text-[10px] font-bold px-2.5 py-1 rounded-md flex items-center space-x-1 shadow-sm ${
+                           mainUploadState.aiStatus === 'loading' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                           mainUploadState.aiStatus === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                           mainUploadState.aiStatus === 'warning' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                           'bg-red-50 text-red-700 border border-red-200'
+                         }`}>
+                           {mainUploadState.aiStatus === 'loading' && <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin shrink-0" />}
+                           {mainUploadState.aiStatus === 'success' && <CheckCircle2 size={12} className="shrink-0" />}
+                           {mainUploadState.aiStatus === 'warning' && <ShieldAlert size={12} className="shrink-0" />}
+                           {mainUploadState.aiStatus === 'error' && <XCircle size={12} className="shrink-0" />}
+                           <span>{mainUploadState.aiMessage || 'Processing...'}</span>
+                         </div>
+                       )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-semibold text-brand-muted uppercase mb-1 block">Color Name</span>
+                        <input type="text" value={formData.colorName || ''} onChange={(e) => { handleFieldChange('colorName', e.target.value); setFormData(p => ({...p, colorManuallyEdited: true}))}} placeholder="e.g. Purple" className="border px-3 py-2.5 rounded-md focus:outline-none bg-brand-white text-xs border-brand-border shadow-sm" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-semibold text-brand-muted uppercase mb-1 block">Color Hex</span>
+                        <div className="flex items-center space-x-2">
+                           <input type="color" value={formData.colorHex || '#000000'} onChange={(e) => { handleFieldChange('colorHex', e.target.value); setFormData(p => ({...p, colorManuallyEdited: true}))}} className="w-10 h-10 border rounded cursor-pointer shrink-0 border-brand-border shadow-sm bg-brand-white p-0.5" />
+                           <input type="text" value={formData.colorHex || ''} onChange={(e) => { handleFieldChange('colorHex', e.target.value); setFormData(p => ({...p, colorManuallyEdited: true}))}} className="border px-3 py-2.5 rounded-md focus:outline-none bg-brand-white text-xs w-full uppercase font-mono border-brand-border shadow-sm" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col">
+                    <label className="font-semibold text-brand-dark mb-1">Product Video URL (Optional)</label>
+                    <input type="text" value={formData.productVideo} onChange={(e) => setFormData({ ...formData, productVideo: e.target.value })} placeholder="https://youtube.com/shorts/... or Instagram Reel URL" className="bg-brand-cream border px-3 py-2.5 rounded-md text-xs focus:outline-none" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SEO & Publish Details */}
+            <div className="bg-brand-white border border-brand-border p-6 rounded-2xl shadow-sm space-y-4">
+              <span className="block text-sm font-display font-bold text-brand-dark border-b pb-2 mb-4">SEO & Tagging</span>
+              
+              <div className="flex flex-col mb-4">
+                <label className="font-semibold text-brand-dark mb-1 flex items-center">URL Slug (Auto generated) {renderConfidenceBadge('slug')}</label>
+                <input type="text" value={formData.slug} onChange={(e) => handleFieldChange('slug', e.target.value)} className={getFieldClass('slug', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none text-brand-muted")} required />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex flex-col">
+                  <span className="font-semibold text-brand-dark mb-2 block">Occasion Tags</span>
+                  <div className="flex flex-wrap gap-2 select-none">
+                    {['Casual', 'Festive', 'Wedding', 'Party', 'Daily Wear'].map(tag => (
+                      <button key={tag} type="button" onClick={() => handleOccasionTagToggle(tag)} className={`px-3 py-1.5 rounded-md text-[11px] font-semibold border transition-colors ${formData.occasionTags.includes(tag) ? 'bg-brand-crimson text-brand-cream border-brand-crimson shadow-sm' : 'bg-brand-cream border-brand-border text-brand-dark hover:border-brand-gold'}`}>
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col">
+                  <span className="font-semibold text-brand-dark mb-2 block">Style Tags</span>
+                  <div className="flex flex-wrap gap-2 select-none">
+                    {['Traditional', 'Contemporary', 'Designer', 'Ethnic'].map(tag => (
+                      <button key={tag} type="button" onClick={() => handleStyleTagToggle(tag)} className={`px-3 py-1.5 rounded-md text-[11px] font-semibold border transition-colors ${formData.styleTags.includes(tag) ? 'bg-brand-crimson text-brand-cream border-brand-crimson shadow-sm' : 'bg-brand-cream border-brand-border text-brand-dark hover:border-brand-gold'}`}>
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              {/* Tags select */}
-              <div className="flex flex-col">
-                <span className="font-semibold text-brand-dark mb-2 block">Occasion Tags</span>
-                <div className="flex flex-wrap gap-1.5 select-none">
-                  {['Casual', 'Festive', 'Wedding', 'Party', 'Daily Wear'].map(tag => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => handleOccasionTagToggle(tag)}
-                      className={`px-2 py-1 rounded text-3xs font-semibold border ${formData.occasionTags.includes(tag) ? 'bg-brand-crimson text-brand-cream border-brand-crimson' : 'bg-brand-cream border-brand-border text-brand-dark'}`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col">
-                <span className="font-semibold text-brand-dark mb-2 block">Style Tags</span>
-                <div className="flex flex-wrap gap-1.5 select-none">
-                  {['Traditional', 'Contemporary', 'Designer', 'Ethnic'].map(tag => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => handleStyleTagToggle(tag)}
-                      className={`px-2 py-1 rounded text-3xs font-semibold border ${formData.styleTags.includes(tag) ? 'bg-brand-crimson text-brand-cream border-brand-crimson' : 'bg-brand-cream border-brand-border text-brand-dark'}`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Status checkboxes */}
-              <div className="grid grid-cols-2 gap-y-2 border-t pt-3 font-sans text-xs text-brand-dark select-none">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-y-3 border-t pt-4 font-sans text-xs text-brand-dark select-none">
                 <label className="flex items-center space-x-2.5 cursor-pointer">
-                  <input type="checkbox" checked={formData.isActive} onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })} className="rounded text-brand-crimson h-3.5 w-3.5 border-brand-border" />
-                  <span>Is Storefront Active</span>
+                  <input type="checkbox" checked={formData.isActive} onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })} className="rounded text-brand-crimson h-4 w-4 border-brand-border" />
+                  <span className="font-semibold">Is Storefront Active</span>
                 </label>
                 <label className="flex items-center space-x-2.5 cursor-pointer">
-                  <input type="checkbox" checked={formData.isFeatured} onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })} className="rounded text-brand-crimson h-3.5 w-3.5 border-brand-border" />
+                  <input type="checkbox" checked={formData.isFeatured} onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })} className="rounded text-brand-crimson h-4 w-4 border-brand-border" />
                   <span>Featured Collection</span>
                 </label>
                 <label className="flex items-center space-x-2.5 cursor-pointer">
-                  <input type="checkbox" checked={formData.isBestseller} onChange={(e) => setFormData({ ...formData, isBestseller: e.target.checked })} className="rounded text-brand-crimson h-3.5 w-3.5 border-brand-border" />
+                  <input type="checkbox" checked={formData.isBestseller} onChange={(e) => setFormData({ ...formData, isBestseller: e.target.checked })} className="rounded text-brand-crimson h-4 w-4 border-brand-border" />
                   <span>Bestseller Collection</span>
                 </label>
                 <label className="flex items-center space-x-2.5 cursor-pointer">
-                  <input type="checkbox" checked={formData.isNewArrival} onChange={(e) => setFormData({ ...formData, isNewArrival: e.target.checked })} className="rounded text-brand-crimson h-3.5 w-3.5 border-brand-border" />
+                  <input type="checkbox" checked={formData.isNewArrival} onChange={(e) => setFormData({ ...formData, isNewArrival: e.target.checked })} className="rounded text-brand-crimson h-4 w-4 border-brand-border" />
                   <span>New Arrivals</span>
                 </label>
                 <label className="flex items-center space-x-2.5 cursor-pointer">
-                  <input type="checkbox" checked={formData.showSizeChart} onChange={(e) => setFormData({ ...formData, showSizeChart: e.target.checked })} className="rounded text-brand-crimson h-3.5 w-3.5 border-brand-border" />
-                  <span>Show Size Options & Size Chart</span>
+                  <input type="checkbox" checked={formData.showSizeChart} onChange={(e) => setFormData({ ...formData, showSizeChart: e.target.checked })} className="rounded text-brand-crimson h-4 w-4 border-brand-border" />
+                  <span>Show Size Options</span>
                 </label>
               </div>
+            </div>
 
-              {/* ─── MULTI-IMAGE CLOUDINARY UPLOADER ─── */}
-              <div className="flex flex-col border-t pt-4 col-span-2">
-                <label className="font-semibold text-brand-dark mb-2">Product Images *</label>
-                
-                {/* Drop zone */}
-                <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 cursor-pointer transition-colors select-none ${
-                  imageUploading ? 'border-brand-gold/40 bg-brand-gold/5' : 'border-brand-border hover:border-brand-crimson/50 hover:bg-brand-crimson/5'
-                }`}>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => handleImageFilesSelected(e.target.files)}
-                    disabled={imageUploading}
-                  />
-                  {imageUploading ? (
-                    <><div className="w-6 h-6 border-2 border-brand-crimson border-t-transparent rounded-full animate-spin mb-2" />
-                    <span className="text-xs text-brand-muted">Uploading to Cloudinary…</span></>
-                  ) : (
-                    <><Upload size={20} className="text-brand-muted mb-2" />
-                    <span className="text-xs font-semibold text-brand-dark">Click or drag to upload images</span>
-                    <span className="text-3xs text-brand-muted mt-1">Multiple files allowed · Original quality preserved</span></>
-                  )}
-                </label>
-
-                {/* Also allow URL fallback */}
-                <div className="flex items-center gap-2 mt-3">
-                  <div className="flex-1 h-px bg-brand-border" />
-                  <span className="text-3xs text-brand-muted uppercase tracking-wider">or paste URL</span>
-                  <div className="flex-1 h-px bg-brand-border" />
+            {/* Variants Section */}
+            <div className="bg-transparent space-y-6">
+              <div className="flex items-center justify-between border-b-2 border-brand-dark/10 pb-2">
+                <div>
+                  <h3 className="text-lg font-display font-bold text-brand-dark">Color Variants</h3>
+                  <p className="text-xs text-brand-muted mt-0.5">Manage distinct colors and sizes for this product.</p>
                 </div>
-                <input
-                  type="text"
-                  value={formData.imageUrl}
-                  onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                  placeholder="https://… (used only if no files uploaded)"
-                  className="bg-brand-cream border px-3 py-2 rounded-md mt-2 text-xs"
-                />
-
-                {/* Uploaded images grid */}
-                {uploadedImages.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-3xs font-semibold text-brand-dark uppercase tracking-wider mb-2">Uploaded Images — click ★ to set primary</p>
-                    <div className="flex flex-wrap gap-3">
-                      {uploadedImages.map((img, i) => (
-                        <div key={i} className={`relative group rounded-lg overflow-hidden border-2 transition-all ${
-                          img.isPrimary ? 'border-brand-crimson' : 'border-brand-border'
-                        }`} style={{ width: 72, height: 96 }}>
-                          <img src={img.url} alt="" className="w-full h-full object-cover object-top" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                            <button type="button" onClick={() => setPrimaryImage(i)}
-                              className="p-1 rounded-full bg-brand-gold text-white" title="Set as primary">
-                              <Star size={10} fill="currentColor" />
-                            </button>
-                            <button type="button" onClick={() => removeUploadedImage(i)}
-                              className="p-1 rounded-full bg-brand-crimson text-white" title="Remove">
-                              <X size={10} />
-                            </button>
+              </div>
+              
+              <div className="space-y-6">
+                {formData.variants.map((v, i) => (
+                  <div key={i} className="border border-brand-border rounded-2xl bg-brand-white overflow-hidden shadow-sm hover:shadow-md transition-shadow relative">
+                    {/* Variant Header */}
+                    <div className="bg-brand-cream/50 px-5 py-4 flex flex-wrap justify-between items-center border-b border-brand-border gap-4">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-8 h-8 rounded-full border border-brand-border shadow-inner" style={{ backgroundColor: v.colorHex || '#000000' }} />
+                        <div>
+                          <h4 className="font-bold text-sm text-brand-dark uppercase tracking-wide">Variant {i + 1}</h4>
+                          <div className="flex items-center space-x-2 mt-0.5">
+                            {v.colorName && <span className="text-[10px] font-semibold text-brand-muted">{v.colorName}</span>}
+                            <span className="text-[10px] font-semibold text-brand-muted">•</span>
+                            <span className="text-[10px] font-semibold text-brand-muted">{v.images?.length || 0} Images</span>
+                            <span className="text-[10px] font-semibold text-brand-muted">•</span>
+                            <span className="text-[10px] font-semibold text-brand-muted">Stock: {v.stock}</span>
                           </div>
-                          {img.isPrimary && (
-                            <span className="absolute bottom-0 left-0 right-0 bg-brand-crimson text-white text-[8px] font-bold text-center py-0.5">PRIMARY</span>
-                          )}
                         </div>
-                      ))}
+                      </div>
+                      
+                      <div className="flex items-center space-x-3">
+                         {v.uploadState?.aiStatus && (
+                            <div className={`text-[10px] font-semibold px-2.5 py-1.5 rounded-md flex items-center space-x-1.5 ${
+                              v.uploadState.aiStatus === 'loading' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                              v.uploadState.aiStatus === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                              v.uploadState.aiStatus === 'warning' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                              'bg-red-50 text-red-700 border border-red-200'
+                            }`}>
+                              {v.uploadState.aiStatus === 'loading' && <div className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin shrink-0" />}
+                              {v.uploadState.aiStatus === 'success' && <CheckCircle2 size={12} className="shrink-0" />}
+                              {v.uploadState.aiStatus === 'warning' && <ShieldAlert size={12} className="shrink-0" />}
+                              {v.uploadState.aiStatus === 'error' && <XCircle size={12} className="shrink-0" />}
+                              <span className="hidden sm:inline">{v.uploadState.aiMessage}</span>
+                            </div>
+                         )}
+                        <button type="button" onClick={() => removeVariantRow(i)} className="text-brand-crimson hover:bg-brand-crimson/10 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors">
+                          <X size={14} /><span>Delete Variant</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Variant Body */}
+                    <div className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-8">
+                      
+                      {/* Left: Configuration */}
+                      <div className="lg:col-span-5 space-y-5">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 block">Color Name</label>
+                            <input type="text" value={v.colorName || ''} onChange={(e) => handleVariantChange(i, 'colorName', e.target.value)} placeholder="e.g. Crimson Red" className="border px-3 py-2 rounded-md w-full focus:outline-none text-xs bg-brand-cream/30" required />
+                          </div>
+                          <div>
+                             <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 block">Color Hex</label>
+                             <div className="flex items-center space-x-2">
+                                <input type="color" value={v.colorHex || '#000000'} onChange={(e) => handleVariantChange(i, 'colorHex', e.target.value)} className="w-8 h-8 border rounded cursor-pointer shrink-0 p-0.5" />
+                                <input type="text" value={v.colorHex || ''} onChange={(e) => handleVariantChange(i, 'colorHex', e.target.value)} className="border px-3 py-2 text-xs rounded-md w-full focus:outline-none font-mono uppercase bg-brand-cream/30" />
+                             </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 block">Size</label>
+                            <select value={v.size} onChange={(e) => handleVariantChange(i, 'size', e.target.value)} className="border px-3 py-2 rounded-md focus:outline-none cursor-pointer w-full text-xs bg-brand-cream/30">
+                              {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 block">Stock</label>
+                            <input type="number" value={v.stock} onChange={(e) => handleVariantChange(i, 'stock', e.target.value)} className="border px-3 py-2 rounded-md w-full text-xs bg-brand-cream/30" required />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 block">Extra Price (₹)</label>
+                            <input type="number" step="0.01" value={v.extraPricePaise} onChange={(e) => handleVariantChange(i, 'extraPricePaise', e.target.value)} className="border px-3 py-2 rounded-md w-full text-xs bg-brand-cream/30" placeholder="0" />
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 block">Variant SKU (Optional)</label>
+                            <input type="text" value={v.variantSku || ''} onChange={(e) => handleVariantChange(i, 'variantSku', e.target.value)} placeholder="SKU-RED" className="border px-3 py-2 rounded-md w-full focus:outline-none text-xs bg-brand-cream/30" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 block">Availability</label>
+                            <select value={v.availability || ''} onChange={(e) => handleVariantChange(i, 'availability', e.target.value)} className="border px-3 py-2 rounded-md focus:outline-none cursor-pointer w-full text-xs bg-brand-cream/30">
+                              <option value="">Same as Product</option>
+                              <option value="Single Ready">Single Ready</option>
+                              <option value="Bulk Ready">Bulk Ready</option>
+                              <option value="Single & Bulk Ready">Single & Bulk Ready</option>
+                              <option value="Made To Order">Made To Order</option>
+                              <option value="Pre Order">Pre Order</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Right: Images Gallery */}
+                      <div className="lg:col-span-7 lg:border-l lg:pl-6 flex flex-col font-sans">
+                        <label className="text-[10px] font-bold text-brand-dark uppercase tracking-wider mb-3 block">Variant Media Gallery</label>
+                        
+                        <div className="flex flex-wrap gap-3">
+                          {/* Uploaded images blocks */}
+                          {v.images && v.images.map((img, imgIdx) => (
+                            <div key={imgIdx} className={`relative group rounded-lg overflow-hidden border-2 transition-all ${
+                              img.isPrimary ? 'border-brand-crimson shadow-md' : 'border-brand-border hover:border-brand-gold'
+                            }`} style={{ width: 84, height: 112 }}>
+                              <img src={img.url} alt="" className="w-full h-full object-cover object-top" />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                                {!img.isPrimary && (
+                                  <button type="button" onClick={() => setVariantPrimaryImage(i, imgIdx)} className="px-2 py-1 rounded bg-brand-gold text-white text-[10px] font-bold shadow-sm">Set Primary</button>
+                                )}
+                                <button type="button" onClick={() => removeVariantImage(i, imgIdx)} className="p-1.5 rounded-full bg-brand-crimson text-white shadow-sm" title="Remove"><X size={12} /></button>
+                              </div>
+                              {img.isPrimary && (
+                                <span className="absolute bottom-0 left-0 right-0 bg-brand-crimson text-white text-[9px] font-bold tracking-wider text-center py-0.5">PRIMARY ★</span>
+                              )}
+                            </div>
+                          ))}
+
+                          {/* Upload More Button inside Gallery */}
+                          <div className="relative" style={{ width: 84, height: 112 }}>
+                            <PremiumUploadCard state={v.uploadState} onRetry={() => handleVariantImageUpload(i, null, true)} />
+                            <label className={`w-full h-full flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-2 cursor-pointer transition-colors select-none ${
+                                v.uploadState?.isUploading ? 'border-brand-gold/40 bg-brand-gold/5' : 'border-brand-border hover:border-brand-crimson/50 hover:bg-brand-crimson/5'
+                              }`}>
+                              <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleVariantImageUpload(i, e.target.files)} disabled={v.uploadState?.isUploading} />
+                              {v.uploadState?.isUploading ? (
+                                <div className="w-5 h-5 border-2 border-brand-crimson border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <><Upload size={16} className="text-brand-muted mb-1" />
+                                <span className="text-[10px] font-semibold text-brand-dark text-center leading-tight">Upload<br/>More</span></>
+                              )}
+                            </label>
+                          </div>
+                        </div>
+                        
+                        {(!v.images || v.images.length === 0) && !v.uploadState?.isUploading && (
+                          <p className="text-[10px] text-brand-muted mt-2 italic">Upload images specifically showing this color variant.</p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                )}
+                ))}
+                
+                <button
+                  type="button"
+                  onClick={addVariantRow}
+                  className="w-full border-2 border-dashed border-brand-border hover:border-brand-gold hover:bg-brand-gold/5 text-brand-dark py-4 rounded-2xl flex items-center justify-center space-x-2 font-bold transition-all shadow-sm"
+                >
+                  <Plus size={16} />
+                  <span>Add New Variant</span>
+                </button>
               </div>
-
             </div>
           </div>
 
-          {/* Variants row tables */}
-          <div className="border-t pt-6 text-left">
-            <div className="flex justify-between items-center mb-3">
-              <span className="block text-xs font-bold text-brand-gold uppercase tracking-wider">Product Variants (Colors & Sizes)</span>
-              <button
-                type="button"
-                onClick={addVariantRow}
-                className="bg-brand-dark hover:bg-brand-muted text-brand-cream text-3xs font-semibold px-3 py-1.5 rounded flex items-center space-x-1"
-              >
-                <Plus size={10} />
-                <span>Add Variant Option</span>
-              </button>
+          {/* Sticky Form Actions */}
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-brand-white/80 backdrop-blur-md border-t border-brand-border shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-4 sm:p-5 flex justify-center">
+            <div className="max-w-5xl w-full flex items-center justify-between">
+              <div className="hidden sm:block">
+                <span className="text-xs font-semibold text-brand-muted flex items-center space-x-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                  <span>Unsaved Changes</span>
+                </span>
+              </div>
+              <div className="flex space-x-3 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormOpen(false);
+                    setEditingProduct(null);
+                  }}
+                  className="flex-1 sm:flex-none bg-brand-white border border-brand-border text-brand-dark px-6 py-3 rounded-xl font-bold hover:bg-brand-cream transition-colors"
+                >
+                  Discard
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 sm:flex-none bg-brand-dark hover:bg-brand-muted text-brand-cream px-8 py-3 rounded-xl font-bold transition-colors shadow-lg flex items-center justify-center space-x-2"
+                >
+                  <CheckCircle2 size={16} />
+                  <span>{editingProduct ? 'Save Changes' : 'Publish Product'}</span>
+                </button>
+              </div>
             </div>
-            
-            <div className="overflow-x-auto border border-brand-border rounded-xl">
-              <table className="min-w-full divide-y bg-brand-white divide-brand-border">
-                <thead className="bg-brand-cream text-[10px] text-brand-crimson font-bold uppercase tracking-wider text-left">
-                  <tr>
-                    <th className="px-4 py-2">Color Name</th>
-                    <th className="px-4 py-2">Color Hex</th>
-                    <th className="px-4 py-2">Size</th>
-                    <th className="px-4 py-2">Stock</th>
-                    <th className="px-4 py-2">Extra Price (INR)</th>
-                    <th className="px-4 py-2 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-brand-border/40 font-sans">
-                  {formData.variants.map((v, i) => (
-                    <tr key={i}>
-                      <td className="px-4 py-2">
-                        <input type="text" value={v.colorName} onChange={(e) => handleVariantChange(i, 'colorName', e.target.value)} placeholder="e.g. Crimson Red" className="border px-2 py-1 rounded w-32 focus:outline-none" required />
-                      </td>
-                      <td className="px-4 py-2 flex items-center space-x-2 mt-1 border-none">
-                        <input type="color" value={v.colorHex} onChange={(e) => handleVariantChange(i, 'colorHex', e.target.value)} className="w-6 h-6 border rounded cursor-pointer shrink-0" />
-                        <input type="text" value={v.colorHex} onChange={(e) => handleVariantChange(i, 'colorHex', e.target.value)} className="border px-1 py-1 text-3xs rounded w-16 focus:outline-none font-mono" />
-                      </td>
-                      <td className="px-4 py-2">
-                        <select value={v.size} onChange={(e) => handleVariantChange(i, 'size', e.target.value)} className="border px-2 py-1 rounded focus:outline-none cursor-pointer">
-                          {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </td>
-                      <td className="px-4 py-2">
-                        <input type="number" value={v.stock} onChange={(e) => handleVariantChange(i, 'stock', e.target.value)} className="border px-2 py-1 rounded w-16" required />
-                      </td>
-                      <td className="px-4 py-2">
-                        <input type="number" step="0.01" value={v.extraPricePaise} onChange={(e) => handleVariantChange(i, 'extraPricePaise', e.target.value)} className="border px-2 py-1 rounded w-20" placeholder="0" />
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <button type="button" onClick={() => removeVariantRow(i)} className="text-brand-crimson hover:underline font-bold">Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                  {formData.variants.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-3 text-center text-brand-muted text-2xs italic">No variants added yet. Added products default to Free Size without distinct color filters.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Form Actions */}
-          <div className="flex space-x-2 pt-4">
-            <button
-              type="submit"
-              className="bg-brand-crimson hover:bg-brand-muted text-brand-cream px-6 py-2.5 rounded-lg font-semibold transition-colors border border-brand-gold/30 shadow-md"
-            >
-              {editingProduct ? 'Save Product Changes' : 'Publish Product'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setFormOpen(false);
-                setEditingProduct(null);
-              }}
-              className="bg-brand-white border border-brand-border text-brand-dark px-6 py-2.5 rounded-lg font-semibold hover:bg-brand-cream"
-            >
-              Cancel
-            </button>
           </div>
 
         </form>
@@ -1158,7 +1882,7 @@ function ProductsView({ token: tokenProp }) {
               </thead>
               <tbody className="divide-y divide-brand-border/40 font-sans text-xs">
                 {products.map((prod) => {
-                  const img = prod.images?.[0]?.url || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=200';
+                  const img = prod.mainProduct?.primaryImage || prod.mainProduct?.images?.[0]?.url || prod.images?.[0]?.url || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=200';
                   return (
                     <tr key={prod._id} className="hover:bg-brand-cream/10">
                       <td className="px-4 py-2 select-none">
