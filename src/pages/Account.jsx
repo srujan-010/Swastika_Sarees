@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { User, MapPin, Heart, LogOut, ShieldAlert, Plus, Trash2, Edit } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { useModalStore } from '../store/modalStore';
 import { useWishlistStore } from '../store/wishlistStore';
 import { useCartStore } from '../store/cartStore';
 
@@ -430,8 +431,13 @@ export default function Account() {
                         <span>Edit</span>
                       </button>
                       <button
-                        onClick={() => {
-                          if (confirm('Delete this address card?')) {
+                        onClick={async () => {
+                          const confirmed = await useModalStore.getState().confirm(
+                            'Delete Address',
+                            'Are you sure you want to delete this address card? This action cannot be undone.',
+                            { confirmText: 'Delete', isDanger: true }
+                          );
+                          if (confirmed) {
                             deleteAddress(addr._id).then(() => fetchProfile());
                           }
                         }}

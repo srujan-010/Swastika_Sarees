@@ -91,25 +91,34 @@ router.post('/', async (req, res) => {
         return res.status(404).json({ error: `Product not found: ${item.name}` });
       }
 
-      if (dbProduct.stock < item.quantity) {
-        outOfStockItems.push(`${dbProduct.name} (Only ${dbProduct.stock} left)`);
-        continue;
-      }
+      let sizeObj = null;
+      let isMainProductColor = false;
+      let variant = null;
 
-      // Check variant stock if color/size specified
       if (item.color || item.size) {
-        const variant = dbProduct.variants.find(v => !item.color || v.colorName === item.color);
-        if (variant) {
-          const sizeObj = variant.sizes?.find(s => !item.size || s.size === item.size);
-          if (sizeObj) {
-            if (sizeObj.stock < item.quantity) {
-              outOfStockItems.push(`${dbProduct.name} - ${item.color || ''} ${item.size || ''} (Only ${sizeObj.stock} left)`);
-            }
-          } else {
-             outOfStockItems.push(`${dbProduct.name} - ${item.color || ''} ${item.size || ''} (Size not found)`);
-          }
+        // Is it the main product?
+        if (dbProduct.mainProduct?.primaryColor?.name === item.color || dbProduct.colorName === item.color) {
+          isMainProductColor = true;
+          sizeObj = dbProduct.mainProduct?.sizes?.find(s => !item.size || s.size === item.size);
         } else {
-          outOfStockItems.push(`${dbProduct.name} - ${item.color || ''} (Color not found)`);
+          variant = dbProduct.variants.find(v => !item.color || v.colorName === item.color);
+          if (variant) {
+            sizeObj = variant.sizes?.find(s => !item.size || s.size === item.size);
+          } else {
+             outOfStockItems.push(`${dbProduct.name} - ${item.color || ''} (Color not found)`);
+          }
+        }
+
+        if ((isMainProductColor || variant) && !sizeObj && item.size) {
+            outOfStockItems.push(`${dbProduct.name} - ${item.color || ''} ${item.size || ''} (Size not found)`);
+        }
+
+        if (sizeObj && sizeObj.stock < item.quantity) {
+          outOfStockItems.push(`${dbProduct.name} - ${item.color || ''} ${item.size || ''} (Only ${sizeObj.stock} left)`);
+        }
+      } else {
+        if (dbProduct.stock < item.quantity) {
+          outOfStockItems.push(`${dbProduct.name} (Only ${dbProduct.stock} left)`);
         }
       }
 
@@ -148,14 +157,18 @@ router.post('/', async (req, res) => {
       // Deduct main stock
       item.product.stock -= item.quantity;
 
-      // Deduct variant stock
+      // Deduct specific size stock
       if (item.color || item.size) {
-        const variant = item.product.variants.find(v => !item.color || v.colorName === item.color);
-        if (variant) {
-          const sizeObj = variant.sizes?.find(s => !item.size || s.size === item.size);
-          if (sizeObj) {
-            sizeObj.stock -= item.quantity;
-          }
+        const isMainProductColor = (item.product.mainProduct?.primaryColor?.name === item.color || item.product.colorName === item.color);
+        if (isMainProductColor) {
+           const sizeObj = item.product.mainProduct?.sizes?.find(s => !item.size || s.size === item.size);
+           if (sizeObj) sizeObj.stock -= item.quantity;
+        } else {
+           const variant = item.product.variants.find(v => !item.color || v.colorName === item.color);
+           if (variant) {
+             const sizeObj = variant.sizes?.find(s => !item.size || s.size === item.size);
+             if (sizeObj) sizeObj.stock -= item.quantity;
+           }
         }
       }
       await item.product.save();
@@ -376,12 +389,16 @@ router.put('/:id/cancel', requireAuth, async (req, res) => {
         dbProduct.stock += item.quantity;
         // Restock variants
         if (item.color || item.size) {
-          const variant = dbProduct.variants.find(v => 
-            (!item.color || v.colorName === item.color) && 
-            (!item.size || v.size === item.size)
-          );
-          if (variant) {
-            variant.stock += item.quantity;
+          const isMainProductColor = (dbProduct.mainProduct?.primaryColor?.name === item.color || dbProduct.colorName === item.color);
+          if (isMainProductColor) {
+             const sizeObj = dbProduct.mainProduct?.sizes?.find(s => !item.size || s.size === item.size);
+             if (sizeObj) sizeObj.stock += item.quantity;
+          } else {
+             const variant = dbProduct.variants.find(v => !item.color || v.colorName === item.color);
+             if (variant) {
+               const sizeObj = variant.sizes?.find(s => !item.size || s.size === item.size);
+               if (sizeObj) sizeObj.stock += item.quantity;
+             }
           }
         }
         await dbProduct.save();

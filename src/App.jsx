@@ -9,6 +9,7 @@ import AnnouncementBar from './components/AnnouncementBar';
 
 
 // Storefront pages
+import GlobalModal from './components/modals/GlobalModal';
 import Home from './pages/Home';
 import Shop from './pages/Shop';
 import ProductDetail from './pages/ProductDetail';
@@ -120,6 +121,7 @@ function AppContent({ scaleX }) {
 
         {/* Global Foot Block */}
         <Footer />
+        <GlobalModal />
       </div>
     </>
   );

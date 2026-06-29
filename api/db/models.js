@@ -85,7 +85,8 @@ const ProductSchema = new Schema({
     },
     images: [ImageSchema],
     primaryImage: { type: String },
-    video: { type: String }
+    video: { type: String },
+    sizes: [SizeVariantSchema]
   },
 
   // Legacy flat fields (kept for backward compatibility during migration)
@@ -140,6 +141,7 @@ const OrderItemSchema = new Schema({
   price: { type: Number, required: true }, // price in paise at time of purchase
   color: { type: String },
   size: { type: String },
+  sku: { type: String },
   imageUrl: { type: String }
 });
 

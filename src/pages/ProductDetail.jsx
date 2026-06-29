@@ -149,46 +149,8 @@ export default function ProductDetail() {
 
   const isSaved = isInWishlist(product._id);
 
-  // Get the selected variant color group
-  const activeVariant = product?.variants?.find(v => v.colorName === selectedColor) || product?.variants?.[0];
-  
-  // Find the selected size object within that color group
-  const activeSizeObj = activeVariant?.sizes?.find(s => s.size === selectedSize) || null;
-
-  const images = activeVariant?.images?.length > 0 
-    ? activeVariant.images 
-    : (product.mainProduct?.images?.length > 0 ? product.mainProduct.images : (product.images?.length > 0 ? product.images : [{ url: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=600' }]));
-
-  const safeImageIndex = Math.min(activeImageIndex, Math.max(0, images.length - 1));
-
-  const displaySku = activeSizeObj?.variantSku || activeVariant?.variantSku || product.sku;
-  
-  // Total stock calculation for Kurti vs Saree
-  let displayStock = 0;
-  if (product.category?.slug !== 'sarees' && product.variants?.length > 0) {
-    if (selectedSize && activeSizeObj) {
-      displayStock = activeSizeObj.stock;
-    } else if (activeVariant) {
-       // If no size selected, sum all sizes for this color to show total available
-       displayStock = activeVariant.sizes?.reduce((sum, s) => sum + (s.stock || 0), 0) || 0;
-    }
-  } else {
-    displayStock = activeVariant?.stock !== undefined ? activeVariant.stock : product.stock;
-  }
-
-  const displayAvailability = activeVariant?.availability || product.availability || 'Single Ready';
-  const displayVideo = activeVariant?.video || product.productVideo;
-  
-  const basePrice = product.price / 100;
-  const extraPrice = activeSizeObj?.extraPricePaise ? activeSizeObj.extraPricePaise / 100 : 0;
-  const currentPrice = basePrice + extraPrice;
-  const originalPrice = product.originalPrice ? (product.originalPrice / 100) + extraPrice : null;
-  const discountPercent = originalPrice ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0;
-
   // Extract unique variants or fallback to primary product color
   const colorsMap = new Map();
-  const sizesMap = new Map();
-  
   const defaultImageUrl = product.mainProduct?.images?.find(i => i.isPrimary)?.url || product.mainProduct?.images?.[0]?.url || product.images?.find(i => i.isPrimary)?.url || product.images?.[0]?.url || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=400';
 
   if (product.mainProduct?.primaryColor?.name || product.colorName) {
@@ -197,32 +159,83 @@ export default function ProductDetail() {
        {
          hex: product.mainProduct?.primaryColor?.hex || product.colorHex || '#000000',
          imageUrl: defaultImageUrl,
-         availability: product.availability || 'Single Ready'
+         availability: product.availability || 'Single Ready',
+         sizes: product.mainProduct?.sizes || [],
+         images: product.mainProduct?.images || product.images || [],
+         video: product.mainProduct?.video || product.productVideo
        }
     );
   }
 
   if (product.variants && product.variants.length > 0) {
     product.variants.forEach(v => {
-      if (v.colorName && !colorsMap.has(v.colorName)) {
-        const variantImageUrl = v.images?.find(i => i.isPrimary)?.url || v.images?.[0]?.url || defaultImageUrl;
-        colorsMap.set(v.colorName, {
-          hex: v.colorHex,
-          imageUrl: variantImageUrl,
-          availability: v.availability || product.availability || 'Single Ready',
-          sizes: v.sizes || []
-        });
+      if (v.colorName) {
+        if (!colorsMap.has(v.colorName)) {
+          const variantImageUrl = v.images?.find(i => i.isPrimary)?.url || v.images?.[0]?.url || defaultImageUrl;
+          colorsMap.set(v.colorName, {
+            hex: v.colorHex,
+            imageUrl: variantImageUrl,
+            availability: v.availability || product.availability || 'Single Ready',
+            sizes: v.sizes || [],
+            images: v.images || [],
+            video: v.video || product.productVideo
+          });
+        } else {
+          // If color already exists in map (e.g. from main product), ensure we update its sizes from the variant
+          const existing = colorsMap.get(v.colorName);
+          existing.sizes = v.sizes || [];
+          if (v.images && v.images.length > 0) existing.images = v.images;
+          if (v.video) existing.video = v.video;
+          colorsMap.set(v.colorName, existing);
+        }
       }
     });
   }
 
   const uniqueColors = Array.from(colorsMap.entries()).map(([name, data]) => ({ name, ...data }));
   
-  // Sizes are derived from the selected color's available sizes
+  // Now find the currently active color object
+  const activeColorObj = colorsMap.get(selectedColor) || uniqueColors[0] || null;
   const showSize = product.showSizeChart !== false && product.category?.slug !== 'sarees';
-  const uniqueSizes = showSize && activeVariant && activeVariant.sizes 
-    ? activeVariant.sizes.map(s => s) 
+  
+  // Sizes are derived from the selected color's available sizes
+  const uniqueSizes = showSize && activeColorObj && activeColorObj.sizes 
+    ? activeColorObj.sizes 
     : [];
+
+  const activeSizeObj = uniqueSizes.find(s => s.size === selectedSize) || (activeColorObj?.sizes?.find(s => s.size === 'Free Size')) || null;
+
+  let displayImages = activeColorObj?.images?.length > 0 ? [...activeColorObj.images] : [{ url: defaultImageUrl }];
+  displayImages.sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+  const images = displayImages;
+  const safeImageIndex = Math.min(activeImageIndex, Math.max(0, images.length - 1));
+
+  const displaySku = activeSizeObj?.variantSku || product.sku;
+  
+  // Total stock calculation
+  let displayStock = 0;
+  if (showSize && uniqueSizes.length > 0) {
+    if (selectedSize && activeSizeObj) {
+      displayStock = activeSizeObj.stock || 0;
+    } else {
+      // Sum of all sizes
+      displayStock = uniqueSizes.reduce((sum, s) => sum + (s.stock || 0), 0) || 0;
+    }
+  } else if (activeColorObj?.sizes?.length > 0) {
+    // e.g. Sarees with "Free Size" array
+    displayStock = activeColorObj.sizes.reduce((sum, s) => sum + (s.stock || 0), 0) || 0;
+  } else {
+    displayStock = product.stock || 0;
+  }
+
+  const displayAvailability = activeColorObj?.availability || 'Single Ready';
+  const displayVideo = activeColorObj?.video;
+  
+  const basePrice = product.price / 100;
+  const extraPrice = activeSizeObj?.extraPricePaise ? activeSizeObj.extraPricePaise / 100 : 0;
+  const currentPrice = basePrice + extraPrice;
+  const originalPrice = product.originalPrice ? (product.originalPrice / 100) + extraPrice : null;
+  const discountPercent = originalPrice ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0;
 
   const handleAddToCart = () => {
     addItem({
@@ -232,7 +245,8 @@ export default function ProductDetail() {
       price: currentPrice,
       quantity,
       color: selectedColor,
-      size: showSize ? selectedSize : null,
+      size: showSize ? selectedSize : (activeSizeObj ? activeSizeObj.size : null),
+      sku: displaySku,
       imageUrl: images[0]?.url,
       stock: displayStock
     });

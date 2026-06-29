@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, MessageSquare, ShieldCheck, Truck, RotateCcw, HelpCircle, Star, Heart, Instagram, X } from 'lucide-react';
+import { useModalStore } from '../store/modalStore';
 import ProductCard from '../components/ProductCard';
 import QuickViewModal from '../components/QuickViewModal';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -65,7 +66,7 @@ export default function Home() {
   const handlePopupSubmit = async (e) => {
     e.preventDefault();
     if (!popupEmail && !popupPhone) {
-      alert('Please enter your email or WhatsApp number.');
+      useModalStore.getState().warning('Missing Details', 'Please enter your email or WhatsApp number.');
       return;
     }
     setPopupSubmitting(true);
@@ -82,11 +83,11 @@ export default function Home() {
           setShowPopup(false);
         }, 2200);
       } else {
-        alert('Failed to submit. Please try again.');
+        useModalStore.getState().error('Submission Failed', 'Failed to submit. Please try again.');
       }
     } catch (err) {
       console.error(err);
-      alert('Network error. Please try again.');
+      useModalStore.getState().error('Network Error', 'Network error. Please try again.');
     } finally {
       setPopupSubmitting(false);
     }

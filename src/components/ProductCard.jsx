@@ -19,31 +19,47 @@ export default function ProductCard({ product, onQuickView }) {
   const originalPrice = product.originalPrice ? product.originalPrice / 100 : null;
   const discountPercent = originalPrice ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0;
 
-  // Extract unique colors from variants
-  const colors = [];
+  // Extract unique colors and sum total stock
   const colorMap = new Map();
-  let totalVariantStock = 0;
+  let totalStock = 0;
+  let hasSizes = false;
+
+  if (product.mainProduct?.primaryColor?.name || product.colorName) {
+    colorMap.set(product.mainProduct?.primaryColor?.name || product.colorName, { hex: product.mainProduct?.primaryColor?.hex || product.colorHex });
+  }
+  if (product.mainProduct?.sizes && product.mainProduct.sizes.length > 0) {
+    hasSizes = true;
+    totalStock += product.mainProduct.sizes.reduce((acc, s) => acc + (s.stock || 0), 0);
+  }
+
   product.variants?.forEach(v => {
     if (v.colorName && !colorMap.has(v.colorName)) {
-      colorMap.set(v.colorName, true);
-      colors.push({ name: v.colorName, hex: v.colorHex });
+      colorMap.set(v.colorName, { hex: v.colorHex });
     }
-    v.sizes?.forEach(s => {
-      totalVariantStock += (s.stock || 0);
-    });
+    if (v.sizes && v.sizes.length > 0) {
+      hasSizes = true;
+      totalStock += v.sizes.reduce((acc, s) => acc + (s.stock || 0), 0);
+    }
   });
 
-  const isOutOfStock = product.category?.slug !== 'sarees' && product.variants?.length > 0
-    ? totalVariantStock === 0
-    : product.stock === 0;
+  const colors = Array.from(colorMap.entries()).map(([name, {hex}]) => ({name, hex}));
+
+  if (!hasSizes) {
+    totalStock = product.stock || 0;
+  }
+  
+  const isOutOfStock = totalStock === 0;
 
   const handleAddToCart = (e) => {
     e.preventDefault();
     e.stopPropagation();
     
-    // Use first variant as default choice if available
-    const defaultVariant = product.variants?.[0];
-    const defaultSizeObj = defaultVariant?.sizes?.find(s => s.stock > 0) || defaultVariant?.sizes?.[0];
+    const defaultColor = product.mainProduct?.primaryColor?.name || product.colorName || product.variants?.[0]?.colorName;
+    const defaultSizes = (product.mainProduct?.sizes && product.mainProduct.sizes.length > 0) 
+      ? product.mainProduct.sizes 
+      : product.variants?.[0]?.sizes;
+      
+    const defaultSizeObj = defaultSizes?.find(s => s.stock > 0) || defaultSizes?.[0];
     
     addItem({
       product: product._id,
@@ -51,10 +67,11 @@ export default function ProductCard({ product, onQuickView }) {
       name: product.name,
       price: currentPrice + (defaultSizeObj?.extraPricePaise ? defaultSizeObj.extraPricePaise / 100 : 0),
       quantity: 1,
-      color: defaultVariant?.colorName || null,
+      color: defaultColor || null,
       size: product.category?.slug !== 'sarees' ? (defaultSizeObj?.size || null) : null,
+      sku: defaultSizeObj?.variantSku || product.sku,
       imageUrl: primaryImage,
-      stock: defaultSizeObj?.stock !== undefined ? defaultSizeObj.stock : product.stock
+      stock: defaultSizeObj?.stock !== undefined ? defaultSizeObj.stock : totalStock
     });
   };
 

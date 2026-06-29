@@ -9,9 +9,11 @@ import { useProductAI } from '../hooks/useProductAI';
 import { detectVariantColor } from '../services/ai/colorDetection';
 import { uploadFileWithProgress } from '../utils/uploadHelpers';
 import AdminLayout from '../layouts/AdminLayout';
+import ProductSizeEditor from '../components/ProductSizeEditor';
 
 // Import Recharts components for beautiful analytics
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
+import { useModalStore } from '../store/modalStore';
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -447,6 +449,7 @@ function ProductsView({ token: tokenProp }) {
     isBestseller: false,
     isNewArrival: false,
     imageUrl: '', // kept for backward compat / URL fallback
+    mainProductSizes: [], // array of sizes for primary product
     variants: [], // { colorName, colorHex, size, stock, extraPricePaise }
     subCategory: '',
     brand: '',
@@ -519,6 +522,16 @@ function ProductsView({ token: tokenProp }) {
             if (subMatch) {
               result.extracted.subCategory = subMatch.slug;
             }
+          }
+          
+          // Auto-generate primary product sizes based on category
+          const aiStock = parseInt(result.extracted.stock) || 10;
+          if (catMatch.slug === 'sarees') {
+            newFormData.mainProductSizes = [{ size: 'Free Size', stock: aiStock, extraPricePaise: 0, variantSku: '' }];
+          } else if (catMatch.slug === 'kurti' || catMatch.slug === 'kurti-sets') {
+            newFormData.mainProductSizes = ['M', 'L', 'XL', 'XXL', '3XL'].map(sz => ({ size: sz, stock: aiStock, extraPricePaise: 0, variantSku: '' }));
+          } else {
+            newFormData.mainProductSizes = [{ size: 'Free Size', stock: aiStock, extraPricePaise: 0, variantSku: '' }];
           }
         }
       }
@@ -760,7 +773,7 @@ function ProductsView({ token: tokenProp }) {
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to update product status due to a network error.');
+      useModalStore.getState().error('Error', 'Failed to update product status due to a network error.');
     }
   };
 
@@ -1033,7 +1046,7 @@ function ProductsView({ token: tokenProp }) {
     }
     
     if (imagesPayload.length === 0 && !editingProduct) {
-      alert('Please upload at least one product image.');
+      useModalStore.getState().info('Information', 'Please upload at least one product image.');
       return;
     }
     
@@ -1041,12 +1054,14 @@ function ProductsView({ token: tokenProp }) {
     
     const body = {
       ...formData,
+      stock: formData.mainProductSizes.reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0),
       images: imagesPayload, // Legacy fallback
       mainProduct: {
         primaryColor: { name: formData.colorName, hex: formData.colorHex },
         images: imagesPayload,
         primaryImage: imagesPayload.find(i => i.isPrimary)?.url || imagesPayload[0]?.url || '',
-        video: formData.productVideo || ''
+        video: formData.productVideo || '',
+        sizes: formData.mainProductSizes
       },
       variants: formData.variants.map(v => {
         // Find the primary variant image
@@ -1137,6 +1152,17 @@ function ProductsView({ token: tokenProp }) {
       imageUrl: prod.mainProduct?.images?.[0]?.url || prod.images?.[0]?.url || '',
       colorName: prod.mainProduct?.primaryColor?.name || prod.colorName || '',
       colorHex: prod.mainProduct?.primaryColor?.hex || prod.colorHex || '#000000',
+      
+      // Load primary product sizes with backward compatibility
+      mainProductSizes: prod.mainProduct?.sizes && prod.mainProduct.sizes.length > 0 ? prod.mainProduct.sizes : (
+        prod.category?.slug === 'sarees' 
+          ? [{ size: 'Free Size', stock: prod.stock || 0, extraPricePaise: 0, variantSku: prod.sku || '' }] 
+          : (['kurti', 'kurti-sets'].includes(prod.category?.slug) 
+            ? ['M', 'L', 'XL', 'XXL', '3XL'].map(sz => ({ size: sz, stock: prod.stock || 0, extraPricePaise: 0, variantSku: '' }))
+            : [{ size: 'Free Size', stock: prod.stock || 0, extraPricePaise: 0, variantSku: prod.sku || '' }]
+          )
+      ),
+
       variants: prod.variants?.map(v => {
         let variantPrimaryFound = false;
         const sanitizedImages = (v.images || []).map((img, i) => {
@@ -1207,7 +1233,7 @@ function ProductsView({ token: tokenProp }) {
 
   const handleDeleteProductClick = async (prod) => {
     console.log('[handleDeleteProductClick] Clicked for product:', prod);
-    if (!window.confirm(`Delete "${prod.name}"? This cannot be undone.`)) {
+    if (!(await useModalStore.getState().confirm('Confirmation', `Delete "${prod.name}"? This cannot be undone.`))) {
       console.log('[handleDeleteProductClick] User cancelled deletion confirmation');
       return;
     }
@@ -1230,7 +1256,7 @@ function ProductsView({ token: tokenProp }) {
       }
     } catch (e) {
       console.error('[handleDeleteProductClick] Network error:', e);
-      alert('Failed to delete product due to a network error.');
+      useModalStore.getState().error('Error', 'Failed to delete product due to a network error.');
     }
   };
 
@@ -1415,7 +1441,7 @@ function ProductsView({ token: tokenProp }) {
                 </div>
                 <div className="flex flex-col">
                   <label className="font-semibold text-brand-dark mb-1 flex items-center">Total Stock * {renderConfidenceBadge('stock')}</label>
-                  <input type="number" value={formData.stock} onChange={(e) => handleFieldChange('stock', e.target.value)} className={getFieldClass('stock', "bg-brand-cream px-3 py-2 rounded-md")} required />
+                  <input type="number" value={formData.mainProductSizes.reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0)} disabled className="bg-brand-cream/50 px-3 py-2 rounded-md cursor-not-allowed opacity-70" required />
                 </div>
                 <div className="flex flex-col">
                   <label className="font-semibold text-brand-dark mb-1 flex items-center">Product SKU {renderConfidenceBadge('sku')}</label>
@@ -1498,10 +1524,15 @@ function ProductsView({ token: tokenProp }) {
               })()}
             </div>
 
-            {/* Main Product Media */}
+            {/* Main Product Media & Sizes */}
             <div className="bg-brand-white border border-brand-border p-6 rounded-2xl shadow-sm space-y-6">
-              <span className="block text-sm font-display font-bold text-brand-dark border-b pb-2 mb-4">Main Product Media</span>
+              <span className="block text-sm font-display font-bold text-brand-dark border-b pb-2 mb-4">Main Product</span>
               
+              <ProductSizeEditor 
+                sizes={formData.mainProductSizes} 
+                onChange={(newSizes) => setFormData(prev => ({ ...prev, mainProductSizes: newSizes }))} 
+              />
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Image Upload Area */}
                 <div className="flex flex-col">
@@ -1717,45 +1748,10 @@ function ProductsView({ token: tokenProp }) {
                           </div>
                         </div>
 
-                        <div className="border border-brand-border/60 rounded-xl overflow-hidden mb-4">
-                          <table className="min-w-full divide-y divide-brand-border/60">
-                            <thead className="bg-brand-cream/50 text-[10px] font-bold text-brand-muted uppercase tracking-wider">
-                              <tr>
-                                <th className="px-3 py-2 text-left">Size</th>
-                                <th className="px-3 py-2 text-left">Stock</th>
-                                <th className="px-3 py-2 text-left">Extra Price (₹)</th>
-                                <th className="px-3 py-2 text-left">SKU</th>
-                                <th className="px-3 py-2"></th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-brand-border/60 text-xs">
-                              {(v.sizes || []).map((s, sIdx) => (
-                                <tr key={sIdx} className="bg-brand-white">
-                                  <td className="px-3 py-2">
-                                    <select value={s.size || ''} onChange={(e) => handleVariantSizeChange(i, sIdx, 'size', e.target.value)} className="w-full bg-transparent border-none focus:outline-none cursor-pointer font-semibold text-brand-dark">
-                                      {SIZES.map(sz => <option key={sz} value={sz}>{sz}</option>)}
-                                    </select>
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <input type="number" value={s.stock ?? 0} onChange={(e) => handleVariantSizeChange(i, sIdx, 'stock', parseInt(e.target.value) || 0)} className="w-16 bg-brand-cream/30 border border-brand-border rounded px-2 py-1 focus:outline-none" required />
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <input type="number" step="0.01" value={s.extraPricePaise ? s.extraPricePaise / 100 : ''} onChange={(e) => handleVariantSizeChange(i, sIdx, 'extraPricePaise', Math.round(parseFloat(e.target.value) * 100) || 0)} className="w-20 bg-brand-cream/30 border border-brand-border rounded px-2 py-1 focus:outline-none" placeholder="0" />
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <input type="text" value={s.variantSku || ''} onChange={(e) => handleVariantSizeChange(i, sIdx, 'variantSku', e.target.value)} className="w-full bg-brand-cream/30 border border-brand-border rounded px-2 py-1 focus:outline-none" placeholder="SKU" />
-                                  </td>
-                                  <td className="px-3 py-2 text-right">
-                                    <button type="button" onClick={() => removeVariantSizeRow(i, sIdx)} className="text-brand-crimson/70 hover:text-brand-crimson p-1"><X size={14} /></button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          <button type="button" onClick={() => addVariantSizeRow(i)} className="w-full text-center py-2 text-[10px] font-bold text-brand-dark uppercase bg-brand-cream/30 hover:bg-brand-gold/10 transition-colors border-t border-brand-border/60">
-                            + Add Size
-                          </button>
-                        </div>
+                        <ProductSizeEditor 
+                          sizes={v.sizes} 
+                          onChange={(newSizes) => handleVariantChange(i, 'sizes', newSizes)} 
+                        />
                         
                         <div className="grid grid-cols-2 gap-4">
                           <div>
@@ -2039,7 +2035,7 @@ function CategoriesView({ token }) {
         alert(data.error || 'Upload failed');
       }
     } catch (e) {
-      alert('Upload failed');
+      useModalStore.getState().error('Error', 'Upload failed');
     } finally {
       setCatImageUploading(false);
     }
@@ -2091,7 +2087,7 @@ function CategoriesView({ token }) {
         alert(data.error || 'Upload failed');
       }
     } catch (e) {
-      alert('Upload failed');
+      useModalStore.getState().error('Error', 'Upload failed');
     }
   };
 
@@ -2169,7 +2165,7 @@ function CategoriesView({ token }) {
 
   const handleDeleteClick = async (cat) => {
     console.log('[handleDeleteClick] Clicked for category:', cat);
-    if (!confirm(`Delete category "${cat.name}"?`)) {
+    if (!(await useModalStore.getState().confirm('Confirmation', `Delete category "${cat.name}"?`))) {
       console.log('[handleDeleteClick] User cancelled deletion confirmation');
       return;
     }
@@ -2617,7 +2613,7 @@ function CustomersView({ token }) {
 
   const toggleAdminRole = async (cust) => {
     const newRole = cust.role === 'admin' ? 'customer' : 'admin';
-    if (!confirm(`Change role of user ${cust.email} to: ${newRole}?`)) return;
+    if (!(await useModalStore.getState().confirm('Confirmation', `Change role of user ${cust.email} to: ${newRole}?`))) return;
 
     try {
       const response = await fetch(`/api/admin/customers/${cust.id}/role`, {
@@ -2761,7 +2757,7 @@ function CouponsView({ token }) {
   };
 
   const handleDeleteClick = async (coup) => {
-    if (!confirm(`Delete coupon code "${coup.code}"?`)) return;
+    if (!(await useModalStore.getState().confirm('Confirmation', `Delete coupon code "${coup.code}"?`))) return;
     try {
       const response = await fetch(`/api/coupons/${coup._id}`, {
         method: 'DELETE',
@@ -2771,7 +2767,7 @@ function CouponsView({ token }) {
       if (response.ok) {
         fetchCoupons();
       } else {
-        alert(data.error);
+        useModalStore.getState().info('Information', data.error);
       }
     } catch (e) {
       console.error(e);
@@ -3467,7 +3463,7 @@ function HomepageView({ token: tokenProp }) {
       }
     } catch (e) {
       console.error(e);
-      alert('Upload failed due to network error');
+      useModalStore.getState().error('Error', 'Upload failed due to network error');
     } finally {
       setBannerUploading(false);
     }
@@ -3493,7 +3489,7 @@ function HomepageView({ token: tokenProp }) {
       }
     } catch (e) {
       console.error(e);
-      alert('Upload failed due to network error');
+      useModalStore.getState().error('Error', 'Upload failed due to network error');
     } finally {
       setPromoUploading(prev => ({ ...prev, [imageIdx]: false }));
     }
@@ -3502,7 +3498,7 @@ function HomepageView({ token: tokenProp }) {
   const handleBannerSubmit = async (e) => {
     e.preventDefault();
     if (!bannerForm.imageUrl) {
-      alert('Image URL is required.');
+      useModalStore.getState().info('Information', 'Image URL is required.');
       return;
     }
     const method = editingBanner ? 'PUT' : 'POST';
@@ -3554,7 +3550,7 @@ function HomepageView({ token: tokenProp }) {
   };
 
   const handleDeleteBanner = async (banId) => {
-    if (!confirm('Are you sure you want to delete this banner?')) return;
+    if (!(await useModalStore.getState().confirm('Confirmation', 'Are you sure you want to delete this banner?'))) return;
     try {
       const res = await fetch(`/api/banners/${banId}`, {
         method: 'DELETE',
@@ -3563,7 +3559,7 @@ function HomepageView({ token: tokenProp }) {
       if (res.ok) {
         fetchBanners();
       } else {
-        alert('Failed to delete banner');
+        useModalStore.getState().error('Error', 'Failed to delete banner');
       }
     } catch (e) {
       console.error(e);
@@ -3585,7 +3581,7 @@ function HomepageView({ token: tokenProp }) {
       if (res.ok) {
         setSettingsSuccess('Homepage content updated successfully!');
       } else {
-        alert('Failed to update homepage content settings');
+        useModalStore.getState().error('Error', 'Failed to update homepage content settings');
       }
     } catch (err) {
       console.error(err);
@@ -3719,7 +3715,7 @@ function HomepageView({ token: tokenProp }) {
                         }
                       } catch (err) {
                         console.error(err);
-                        alert('Video upload failed');
+                        useModalStore.getState().error('Error', 'Video upload failed');
                       } finally {
                         setHeroVideoUploading(false);
                       }
@@ -3771,7 +3767,7 @@ function HomepageView({ token: tokenProp }) {
                         }
                       } catch (err) {
                         console.error(err);
-                        alert('Image upload failed');
+                        useModalStore.getState().error('Error', 'Image upload failed');
                       } finally {
                         setHeroImagesUploading(false);
                       }
@@ -3831,11 +3827,11 @@ function HomepageView({ token: tokenProp }) {
                 if (res.ok) {
                   setHeroSuccess('Hero landing section saved successfully!');
                 } else {
-                  alert('Failed to save hero landing settings.');
+                  useModalStore.getState().error('Error', 'Failed to save hero landing settings.');
                 }
               } catch (err) {
                 console.error(err);
-                alert('Network error saving hero section.');
+                useModalStore.getState().error('Error', 'Network error saving hero section.');
               } finally {
                 setHeroSaving(false);
               }
@@ -4239,7 +4235,7 @@ function SettingsView({ token }) {
   };
 
   const handleDelete = async (revId) => {
-    if (!confirm('Are you sure you want to delete this review?')) return;
+    if (!(await useModalStore.getState().confirm('Confirmation', 'Are you sure you want to delete this review?'))) return;
     setActionError('');
     try {
       const response = await fetch(`/api/reviews/${revId}`, {
