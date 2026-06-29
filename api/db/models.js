@@ -124,6 +124,8 @@ const ProductSchema = new Schema({
     average: { type: Number, default: 0 },
     count: { type: Number, default: 0 }
   },
+  rating: { type: Number, default: 4.9 },
+  reviewsCount: { type: Number, default: 33 },
   showSizeChart: { type: Boolean, default: true } // if false, hide size selector on storefront
 }, { timestamps: true });
 

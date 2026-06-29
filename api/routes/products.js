@@ -402,7 +402,7 @@ router.post('/', requireAdmin, async (req, res) => {
       occasionTags, styleTags, price, originalPrice, stock, weightGrams,
       sku, isActive, isFeatured, isBestseller, isNewArrival, images,
       variants, seo, productVideo, productHighlights, availability, dispatchTime,
-      colorName, colorHex, mainProduct, specifications
+      colorName, colorHex, mainProduct, specifications, rating, reviewsCount
     } = req.body;
 
     if (!name || !slug || !category || !price) {
@@ -444,7 +444,9 @@ router.post('/', requireAdmin, async (req, res) => {
       variants: variants || [],
       seo: seo || { metaTitle: name, metaDescription: description?.replace(/<[^>]*>/g, '').substring(0, 160) },
       brand, productVideo, productHighlights, dispatchTime,
-      colorName, colorHex, specifications: specifications || {}
+      colorName, colorHex, specifications: specifications || {},
+      rating: rating ? parseFloat(rating) : undefined,
+      reviewsCount: reviewsCount ? parseInt(reviewsCount) : undefined
     };
 
     if (availability !== "") {
@@ -482,7 +484,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
       occasionTags, styleTags, price, originalPrice, stock, weightGrams,
       sku, isActive, isFeatured, isBestseller, isNewArrival, images,
       variants, seo, productVideo, productHighlights, availability, dispatchTime,
-      colorName, colorHex, mainProduct, specifications
+      colorName, colorHex, mainProduct, specifications, rating, reviewsCount
     } = req.body;
 
     const existing = await Product.findOne({ slug, _id: { $ne: prodId } });
@@ -522,7 +524,9 @@ router.put('/:id', requireAdmin, async (req, res) => {
       variants: variants || [],
       seo: seo || { metaTitle: name, metaDescription: description?.replace(/<[^>]*>/g, '').substring(0, 160) },
       brand, productVideo, productHighlights, dispatchTime,
-      colorName, colorHex, specifications: specifications || {}
+      colorName, colorHex, specifications: specifications || {},
+      rating: rating ? parseFloat(rating) : undefined,
+      reviewsCount: reviewsCount ? parseInt(reviewsCount) : undefined
     };
 
     if (availability !== "") {
