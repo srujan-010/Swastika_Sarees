@@ -218,11 +218,35 @@ const ReviewSchema = new Schema({
 
 // 11. Banner Schema
 const BannerSchema = new Schema({
+  type: { type: String, enum: ['product', 'custom'], default: 'custom' },
+  productId: { type: Schema.Types.ObjectId, ref: 'Product' },
+  selectedImage: { type: String },
+  layout: { type: String, enum: ['left-image', 'right-image', 'center'], default: 'left-image' },
+  background: { 
+    type: String, 
+    enum: [
+      'white-premium', 'beige-luxury', 'palace', 'minimal', 'dark-luxury', 'transparent',
+      'luxury-palace-interior', 'heritage-haveli', 'royal-archways', 'marble-floor-shadows',
+      'silk-fabric-texture', 'premium-beige-gradient', 'warm-ivory-luxury', 'golden-ambient-lighting',
+      'traditional-jharokha-windows', 'floral-luxury-decor', 'soft-bokeh-lighting', 'minimal-editorial-fashion'
+    ], 
+    default: 'premium-beige-gradient' 
+  },
+  backgroundImage: { type: String },
+  gradientOverlay: { type: String, enum: ['none', 'soft-radial', 'dark-vignette', 'golden-glow', 'warm-overlay'], default: 'soft-radial' },
+  textAlignment: { type: String, enum: ['left', 'center', 'right'], default: 'left' },
+  decorativeTheme: { type: String, enum: ['none', 'floral-watermark', 'gold-accent-lines', 'traditional-motifs', 'luxury-circles', 'abstract-curves'], default: 'none' },
+  overrideTitle: { type: String },
+  overrideSubtitle: { type: String },
+  secondaryButtonText: { type: String },
+  secondaryButtonLink: { type: String },
+  badge: { type: String },
+  // Keep original fields for backward compatibility and custom banners
   title: { type: String },
   subtitle: { type: String },
   ctaText: { type: String },
   ctaLink: { type: String },
-  imageUrl: { type: String, required: true },
+  imageUrl: { type: String },
   displayOrder: { type: Number, default: 0 },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
@@ -279,6 +303,55 @@ const LeadSchema = new Schema({
   phone: { type: String, trim: true }
 }, { timestamps: true });
 
+// 14. Popup Setting Schema
+const PopupSettingSchema = new Schema({
+  images: {
+    desktopUrl: { type: String, default: 'https://images.unsplash.com/photo-1610030469983-98e550d6153c?auto=format&fit=crop&w=800&q=80' },
+    mobileUrl: { type: String, default: 'https://images.unsplash.com/photo-1610030469983-98e550d6153c?auto=format&fit=crop&w=800&q=80' }
+  },
+  promotional: {
+    badgeText: { type: String, default: '✨ NEW ARRIVALS' },
+    heading: { type: String, default: 'Premium Sarees & Kurtis' },
+    description: { type: String, default: 'Get up to 10% OFF on your first order when you join the Swastika family.' }
+  },
+  overlay: {
+    type: { type: String, enum: ['light', 'dark', 'gradient', 'none'], default: 'gradient' },
+    opacity: { type: Number, default: 80 }
+  },
+  benefits: [{
+    icon: { type: String }, // name of lucide icon
+    title: { type: String },
+    isEnabled: { type: Boolean, default: true }
+  }],
+  header: {
+    title: { type: String, default: 'Welcome to Swastika Sarees ✨' },
+    subtitle: { type: String, default: 'Sign in to continue shopping, save your wishlist, track orders, and get exclusive offers.' }
+  },
+  buttons: {
+    signIn: { type: String, default: 'Sign In' },
+    signUp: { type: String, default: 'Create Account' },
+    guest: { type: String, default: 'Continue as Guest' },
+    google: { type: String, default: 'Continue with Google' },
+    apple: { type: String, default: 'Continue with Apple' }
+  },
+  display: {
+    delayMs: { type: Number, default: 3000 },
+    showOncePerSession: { type: Boolean, default: true },
+    showOnlyForGuest: { type: Boolean, default: true },
+    hideAfterLogin: { type: Boolean, default: true },
+    isEnabled: { type: Boolean, default: true }
+  },
+  firstOrderOffer: {
+    isEnabled: { type: Boolean, default: false },
+    title: { type: String, default: '10% OFF First Order' },
+    description: { type: String, default: 'Use code WELCOME10 at checkout' },
+    couponCode: { type: String, default: 'WELCOME10' },
+    expiryDays: { type: Number, default: 7 },
+    minCartValue: { type: Number, default: 0 },
+    signupOnly: { type: Boolean, default: true }
+  }
+}, { timestamps: true });
+
 // Prevent model overwrite compiled errors on hot-reloading
 export const User = mongoose.models.User || mongoose.model('User', UserSchema);
 export const Category = mongoose.models.Category || mongoose.model('Category', CategorySchema);
@@ -288,5 +361,6 @@ export const Coupon = mongoose.models.Coupon || mongoose.model('Coupon', CouponS
 export const Review = mongoose.models.Review || mongoose.model('Review', ReviewSchema);
 export const Banner = mongoose.models.Banner || mongoose.model('Banner', BannerSchema);
 export const Setting = mongoose.models.Setting || mongoose.model('Setting', SettingSchema);
+export const PopupSetting = mongoose.models.PopupSetting || mongoose.model('PopupSetting', PopupSettingSchema);
 export const Address = mongoose.models.Address || mongoose.model('Address', AddressSchema);
 export const Lead = mongoose.models.Lead || mongoose.model('Lead', LeadSchema);

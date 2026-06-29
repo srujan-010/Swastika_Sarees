@@ -7,7 +7,9 @@ const router = express.Router();
 // GET active banners (Storefront carousel)
 router.get('/', async (req, res) => {
   try {
-    const banners = await Banner.find({ isActive: true }).sort({ displayOrder: 1 });
+    const banners = await Banner.find({ isActive: true })
+      .populate('productId')
+      .sort({ displayOrder: 1 });
     res.json(banners);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -17,7 +19,9 @@ router.get('/', async (req, res) => {
 // GET all banners (Admin panel)
 router.get('/all', requireAdmin, async (req, res) => {
   try {
-    const banners = await Banner.find().sort({ displayOrder: 1 });
+    const banners = await Banner.find()
+      .populate('productId')
+      .sort({ displayOrder: 1 });
     res.json(banners);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -27,12 +31,30 @@ router.get('/all', requireAdmin, async (req, res) => {
 // POST add banner (Admin)
 router.post('/', requireAdmin, async (req, res) => {
   try {
-    const { title, subtitle, ctaText, ctaLink, imageUrl, displayOrder, isActive } = req.body;
-    if (!imageUrl) {
-      return res.status(400).json({ error: 'Image URL is required' });
+    const { 
+      type, productId, selectedImage, layout, background, 
+      overrideTitle, overrideSubtitle, secondaryButtonText, secondaryButtonLink, badge,
+      title, subtitle, ctaText, ctaLink, imageUrl, displayOrder, isActive 
+    } = req.body;
+
+    if (type === 'custom' && !imageUrl) {
+      return res.status(400).json({ error: 'Image URL is required for custom banners' });
+    }
+    if (type === 'product' && !productId) {
+      return res.status(400).json({ error: 'Product ID is required for product banners' });
     }
 
     const banner = await Banner.create({
+      type: type || 'custom',
+      productId: productId || null,
+      selectedImage,
+      layout,
+      background,
+      overrideTitle,
+      overrideSubtitle,
+      secondaryButtonText,
+      secondaryButtonLink,
+      badge,
       title,
       subtitle,
       ctaText,
@@ -52,11 +74,33 @@ router.post('/', requireAdmin, async (req, res) => {
 router.put('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, subtitle, ctaText, ctaLink, imageUrl, displayOrder, isActive } = req.body;
+    const { 
+      type, productId, selectedImage, layout, background, 
+      overrideTitle, overrideSubtitle, secondaryButtonText, secondaryButtonLink, badge,
+      title, subtitle, ctaText, ctaLink, imageUrl, displayOrder, isActive 
+    } = req.body;
 
     const banner = await Banner.findByIdAndUpdate(
       id,
-      { title, subtitle, ctaText, ctaLink, imageUrl, displayOrder, isActive },
+      { 
+        type: type || 'custom', 
+        productId: productId || null, 
+        selectedImage, 
+        layout, 
+        background, 
+        overrideTitle, 
+        overrideSubtitle, 
+        secondaryButtonText, 
+        secondaryButtonLink, 
+        badge,
+        title, 
+        subtitle, 
+        ctaText, 
+        ctaLink, 
+        imageUrl, 
+        displayOrder, 
+        isActive 
+      },
       { new: true, runValidators: true }
     );
 

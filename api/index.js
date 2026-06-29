@@ -10,6 +10,7 @@ import settingsRouter from './routes/settings.js';
 import aiRouter from './routes/ai.js';
 import ordersRouter from './routes/orders.js';
 import uploadRouter from './routes/upload.js';
+import popupRouter from './routes/popup.js';
 import { requireAuth } from './middleware/auth.js';
 import { User, Order, Product, Lead } from './db/models.js';
 
@@ -131,11 +132,23 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Access Denied: Admin privileges required' });
   }
   try {
+    const range = req.query.range || '30d';
+    let dateLimit = new Date();
+    if (range === 'today') dateLimit.setHours(0, 0, 0, 0);
+    else if (range === '7d') dateLimit.setDate(dateLimit.getDate() - 7);
+    else if (range === '12m') dateLimit.setMonth(dateLimit.getMonth() - 12);
+    else dateLimit.setDate(dateLimit.getDate() - 30); // 30d default
+
+    const prevDateLimit = new Date(dateLimit);
+    if (range === 'today') prevDateLimit.setDate(prevDateLimit.getDate() - 1);
+    else if (range === '7d') prevDateLimit.setDate(prevDateLimit.getDate() - 7);
+    else if (range === '12m') prevDateLimit.setMonth(prevDateLimit.getMonth() - 12);
+    else prevDateLimit.setDate(prevDateLimit.getDate() - 30);
+    
     // 1. KPI Stats
     const totalOrders = await Order.countDocuments();
     const pendingOrders = await Order.countDocuments({ status: { $in: ['pending', 'confirmed', 'processing'] } });
     
-    // Total Revenue (paise to INR)
     const revenueStats = await Order.aggregate([
       { $match: { 'payment.status': 'paid' } },
       { $group: { _id: null, total: { $sum: '$pricing.total' } } }
@@ -143,20 +156,39 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
     const totalRevenue = revenueStats.length > 0 ? revenueStats[0].total / 100 : 0;
 
     const newCustomersCount = await User.countDocuments({ role: 'customer' });
+    const totalProductsCount = await Product.countDocuments();
     const lowStockItemsCount = await Product.countDocuments({ stock: { $lt: 5 } });
 
+    // Trends (vs previous period)
+    const currentPeriodOrders = await Order.countDocuments({ createdAt: { $gte: dateLimit } });
+    const prevPeriodOrders = await Order.countDocuments({ createdAt: { $gte: prevDateLimit, $lt: dateLimit } });
+    
+    const currRev = await Order.aggregate([
+      { $match: { 'payment.status': 'paid', createdAt: { $gte: dateLimit } } },
+      { $group: { _id: null, total: { $sum: '$pricing.total' } } }
+    ]);
+    const prevRev = await Order.aggregate([
+      { $match: { 'payment.status': 'paid', createdAt: { $gte: prevDateLimit, $lt: dateLimit } } },
+      { $group: { _id: null, total: { $sum: '$pricing.total' } } }
+    ]);
+    const currentRevenue = currRev.length ? currRev[0].total / 100 : 0;
+    const previousRevenue = prevRev.length ? prevRev[0].total / 100 : 0;
+
     // 2. Revenue over time (daily stats)
+    let groupFormat = "%Y-%m-%d";
+    if (range === 'today') groupFormat = "%H:00";
+    else if (range === '12m') groupFormat = "%Y-%m";
+    
     const chartStats = await Order.aggregate([
-      { $match: { 'payment.status': 'paid' } },
+      { $match: { 'payment.status': 'paid', createdAt: { $gte: dateLimit } } },
       {
         $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          _id: { $dateToString: { format: groupFormat, date: "$createdAt", timezone: "Asia/Kolkata" } },
           revenue: { $sum: "$pricing.total" },
           orders: { $sum: 1 }
         }
       },
-      { $sort: { _id: 1 } },
-      { $limit: 30 }
+      { $sort: { _id: 1 } }
     ]);
 
     const dailyRevenue = chartStats.map(c => ({
@@ -194,11 +226,7 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
         }
       }
     ]);
-
-    const categoryRevenue = categoryStats.map(cat => ({
-      name: cat._id,
-      value: cat.revenue / 100
-    }));
+    const categoryRevenue = categoryStats.map(cat => ({ name: cat._id, value: cat.revenue / 100 }));
 
     // 4. Top 5 selling products
     const topProductsStats = await Order.aggregate([
@@ -206,7 +234,9 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
       { $unwind: '$items' },
       {
         $group: {
-          _id: '$items.name',
+          _id: '$items.product',
+          name: { $first: '$items.name' },
+          image: { $first: '$items.image' },
           unitsSold: { $sum: '$items.quantity' },
           revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
         }
@@ -214,12 +244,67 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
       { $sort: { revenue: -1 } },
       { $limit: 5 }
     ]);
-
     const topProducts = topProductsStats.map(p => ({
-      name: p._id,
+      name: p.name,
+      image: p.image,
       unitsSold: p.unitsSold,
       revenue: p.revenue / 100
     }));
+
+    // 5. Recent Orders
+    const recentOrders = await Order.find().sort({ createdAt: -1 }).limit(5).populate('user', 'firstName lastName email').lean();
+
+    // 6. Low Stock Products
+    const lowStockProducts = await Product.find({ stock: { $lt: 5 } }).select('name images stock').limit(5).lean();
+
+    // 7. Sales Heatmap (by Day of Week)
+    const heatmapStats = await Order.aggregate([
+      { $match: { 'payment.status': 'paid' } },
+      {
+        $group: {
+          _id: { $dayOfWeek: { date: "$createdAt", timezone: "Asia/Kolkata" } },
+          orders: { $sum: 1 },
+          revenue: { $sum: "$pricing.total" }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+    const daysMap = ['', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const heatmap = heatmapStats.map(h => ({
+      day: daysMap[h._id],
+      orders: h.orders,
+      revenue: h.revenue / 100
+    }));
+
+    // 8. Activity Feed (merge latest orders, products, users)
+    const [latestOrders, latestProducts, latestUsers] = await Promise.all([
+      Order.find().sort({ createdAt: -1 }).limit(5).populate('user', 'firstName lastName').lean(),
+      Product.find().sort({ createdAt: -1 }).limit(5).lean(),
+      User.find({ role: 'customer' }).sort({ createdAt: -1 }).limit(5).lean()
+    ]);
+    
+    let activityFeed = [];
+    latestOrders.forEach(o => activityFeed.push({ type: 'order', title: 'Order Placed', desc: `₹${(o.pricing.total/100).toLocaleString('en-IN')} by ${o.user?.firstName || 'Customer'}`, time: o.createdAt }));
+    latestProducts.forEach(p => activityFeed.push({ type: 'product', title: 'Product Added', desc: p.name, time: p.createdAt }));
+    latestUsers.forEach(u => activityFeed.push({ type: 'user', title: 'Customer Registered', desc: `${u.firstName} ${u.lastName}`, time: u.createdAt }));
+    activityFeed.sort((a, b) => new Date(b.time) - new Date(a.time));
+    activityFeed = activityFeed.slice(0, 10);
+
+    // 9. Quick Insights
+    const aov = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+    const bestSellingCat = categoryRevenue.length > 0 ? categoryRevenue.sort((a,b)=>b.value-a.value)[0].name : 'N/A';
+    
+    const todaysRevStat = await Order.aggregate([
+      { $match: { 'payment.status': 'paid', createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) } } },
+      { $group: { _id: null, total: { $sum: '$pricing.total' } } }
+    ]);
+    const todaysRevenue = todaysRevStat.length ? todaysRevStat[0].total / 100 : 0;
+
+    const pendingPayStats = await Order.aggregate([
+      { $match: { 'payment.status': 'pending' } },
+      { $group: { _id: null, total: { $sum: '$pricing.total' } } }
+    ]);
+    const pendingPayments = pendingPayStats.length ? pendingPayStats[0].total / 100 : 0;
 
     res.json({
       kpis: {
@@ -227,11 +312,28 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
         totalOrders,
         pendingOrders,
         newCustomersCount,
-        lowStockItemsCount
+        lowStockItemsCount,
+        totalProductsCount,
+        trends: {
+          ordersCurrent: currentPeriodOrders,
+          ordersPrev: prevPeriodOrders,
+          revCurrent: currentRevenue,
+          revPrev: previousRevenue
+        }
       },
       dailyRevenue,
       categoryRevenue,
-      topProducts
+      topProducts,
+      recentOrders,
+      lowStockProducts,
+      heatmap,
+      activityFeed,
+      insights: {
+        aov,
+        bestSellingCat,
+        todaysRevenue,
+        pendingPayments
+      }
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -325,6 +427,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/upload', uploadRouter);
+app.use('/api/popup', popupRouter);
 
 // Start Express server locally in development
 const PORT = process.env.PORT || 5000;

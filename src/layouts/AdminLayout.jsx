@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   LayoutDashboard, ShoppingBag, FolderHeart, ListOrdered, Users, Ticket, Image,
-  MessageSquare, Settings, Mail, LogOut
+  MessageSquare, Settings, Mail, LogOut, MonitorSmartphone
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -80,6 +80,12 @@ export default function AdminLayout({ activeTab, setActiveTab, user, logout, chi
               className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'leads' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
             >
               <Mail size={16} /> <span>Marketing Leads</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('popup')}
+              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'popup' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
+            >
+              <MonitorSmartphone size={16} /> <span>Popup Settings</span>
             </button>
             <button
               onClick={() => setActiveTab('settings')}

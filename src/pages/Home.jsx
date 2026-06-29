@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, MessageSquare, ShieldCheck, Truck, RotateCcw, HelpCircle, Star, Heart, Instagram, X } from 'lucide-react';
+import { ArrowRight, MessageSquare, ShieldCheck, Truck, RotateCcw, HelpCircle, Star, Heart, Instagram, X, Check } from 'lucide-react';
 import { useModalStore } from '../store/modalStore';
 import ProductCard from '../components/ProductCard';
 import QuickViewModal from '../components/QuickViewModal';
@@ -19,84 +19,9 @@ export default function Home() {
   const [activeBannerIndex, setActiveBannerIndex] = useState(0);
   const [activeReviewIndex, setActiveReviewIndex] = useState(0);
 
-  // Lead capture popup states
-  const [showPopup, setShowPopup] = useState(false);
-  const [popupEmail, setPopupEmail] = useState('');
-  const [popupPhone, setPopupPhone] = useState('');
-  const [popupSubmitting, setPopupSubmitting] = useState(false);
-  const [popupSuccess, setPopupSuccess] = useState(false);
   const [activeThumbnailIndex, setActiveThumbnailIndex] = useState(0);
   const [isHoveringCarousel, setIsHoveringCarousel] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-
-  // Trigger popup after 10s or 200px scroll for unsigned-in new users
-  useEffect(() => {
-    const token = useAuthStore.getState().token;
-    if (token) return;
-
-    const isDismissed = localStorage.getItem('swastika_popup_dismissed');
-    const isSubmitted = localStorage.getItem('swastika_popup_submitted');
-    if (isDismissed || isSubmitted) return;
-
-    let triggered = false;
-    const triggerPopup = () => {
-      if (triggered) return;
-      triggered = true;
-      setShowPopup(true);
-      window.removeEventListener('scroll', handleScroll);
-    };
-
-    const timer = setTimeout(() => {
-      triggerPopup();
-    }, 10000);
-
-    const handleScroll = () => {
-      if (window.scrollY > 200) {
-        triggerPopup();
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
-
-  const handlePopupSubmit = async (e) => {
-    e.preventDefault();
-    if (!popupEmail && !popupPhone) {
-      useModalStore.getState().warning('Missing Details', 'Please enter your email or WhatsApp number.');
-      return;
-    }
-    setPopupSubmitting(true);
-    try {
-      const response = await fetch('/api/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: popupEmail, phone: popupPhone })
-      });
-      if (response.ok) {
-        localStorage.setItem('swastika_popup_submitted', 'true');
-        setPopupSuccess(true);
-        setTimeout(() => {
-          setShowPopup(false);
-        }, 2200);
-      } else {
-        useModalStore.getState().error('Submission Failed', 'Failed to submit. Please try again.');
-      }
-    } catch (err) {
-      console.error(err);
-      useModalStore.getState().error('Network Error', 'Network error. Please try again.');
-    } finally {
-      setPopupSubmitting(false);
-    }
-  };
-
-  const handlePopupDismiss = () => {
-    localStorage.setItem('swastika_popup_dismissed', 'true');
-    setShowPopup(false);
-  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -148,11 +73,18 @@ export default function Home() {
     },
     {
       _id: 'banner2',
-      title: 'Summer Chiffon & Georgette Kurtis',
-      subtitle: 'Lightweight, vibrant, and elegant. Shine bright this festive season!',
-      ctaText: 'Explore Kurtis',
-      ctaLink: '/shop?category=kurtis',
-      imageUrl: 'https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?auto=format&fit=crop&q=80&w=1200'
+      title: 'Summer Chiffon Georgette',
+      subtitle: 'Embrace the summer breeze with our ultra-lightweight chiffon collection. Featuring vibrant prints and impeccable draping for effortless elegance.',
+      ctaText: 'Shop Sarees',
+      ctaLink: '/shop?category=sarees',
+      secondaryButtonText: 'View All',
+      secondaryButtonLink: '/shop',
+      imageUrl: 'https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?auto=format&fit=crop&q=80&w=1200',
+      badge: 'Premium Chiffon',
+      chips: ['Breathable', 'Vibrant Prints', 'Summer Ready', 'Easy Care'],
+      mockPrice: '1,499',
+      mockOriginalPrice: '2,999',
+      background: 'premium-beige-gradient'
     }
   ];
 
@@ -364,44 +296,208 @@ export default function Home() {
         </svg>
         
         {activeBanners.map((slide, index) => {
-          const extraData = premiumSlideData[index % premiumSlideData.length];
+          const isProduct = slide.type === 'product' && slide.productId;
+          const displayTitle = slide.overrideTitle || (isProduct ? slide.productId.name : slide.title) || 'Banner Title';
+          const titleWords = displayTitle.split(' ');
+          const titleFirstPart = titleWords.slice(0, Math.ceil(titleWords.length / 2)).join(' ');
+          const titleSecondPart = titleWords.slice(Math.ceil(titleWords.length / 2)).join(' ');
+          
+          const displaySubtitle = slide.overrideSubtitle || (isProduct && slide.productId.category ? slide.productId.category.name : slide.subtitle) || '';
+          const displayPrice = isProduct ? slide.productId.price : (slide.mockPrice ? slide.mockPrice : null);
+          const originalPrice = isProduct && slide.productId.originalPrice ? `₹${slide.productId.originalPrice}` : (slide.mockOriginalPrice ? `₹${slide.mockOriginalPrice}` : null);
+          
+          let displayFeatures = slide.features || [];
+          let displayChips = slide.chips || [];
+          
+          if (displayFeatures.length === 0 && displayChips.length === 0) {
+            const t = displayTitle.toLowerCase();
+            const c = (isProduct && slide.productId.category ? slide.productId.category.name : '').toLowerCase();
+            const matches = (k) => t.includes(k) || c.includes(k);
+            
+            if (matches('silk')) {
+              displayFeatures = ['Pure Silk', 'Running Blouse', 'Ready to Ship', 'Premium Finish'];
+              displayChips = ['Premium Silk', 'Wedding Wear', 'Festive', 'Luxury'];
+            } else if (matches('georgette') || matches('chiffon')) {
+              displayFeatures = ['Lightweight', 'Flowing Drape', 'Party Wear', 'Easy Care'];
+              displayChips = ['Lightweight', 'Elegant', 'Designer', 'Comfort Fit'];
+            } else if (matches('cotton') && !matches('kurti')) {
+              displayFeatures = ['Breathable', 'Skin Friendly', 'Daily Wear', 'Summer Collection'];
+              displayChips = ['Comfort', 'Breathable', 'Everyday', 'Handloom'];
+            } else if (matches('kurti')) {
+              displayFeatures = ['Premium Cotton', '3 Piece Set', 'Available Sizes M–3XL', 'Embroidery Work'];
+              displayChips = ['Premium Cotton', 'Festive', 'Easy Care', 'Ready to Ship'];
+            } else if (matches('dress') || matches('unstitched')) {
+              displayFeatures = ['Unstitched Fabric', 'Matching Dupatta', 'Designer Collection', 'Stitch Ready'];
+              displayChips = ['Custom Fit', 'Complete Set', 'Designer', 'Premium'];
+            } else {
+              displayFeatures = ['Premium Quality Fabric', 'Designer Collection', 'Ready to Ship', 'COD Available'];
+              displayChips = ['Premium Fabric', 'Handpicked', 'Easy Care', 'Festive Wear'];
+            }
+          }
+          
+          let displayBadge = slide.badge;
+          if (!displayBadge && isProduct) {
+            displayBadge = slide.productId.isFeatured ? 'FEATURED' : 'NEW ARRIVAL';
+          }
+          
+          const displayImage = isProduct ? slide.selectedImage : slide.imageUrl;
+          const ctaText = slide.ctaText || 'Shop Now';
+          const ctaLink = isProduct ? `/product/${slide.productId.slug}` : (slide.ctaLink || '/shop');
+          const secondaryBtnText = slide.secondaryButtonText;
+          const secondaryBtnLink = slide.secondaryButtonLink || '/shop';
+
+          let containerLayout = '';
+          let textAlignmentClass = '';
+          
+          if (slide.layout === 'right-image') {
+            containerLayout = 'flex-col md:flex-row';
+            textAlignmentClass = 'items-center md:items-start md:pl-6 lg:pl-12';
+          } else if (slide.layout === 'center') {
+            containerLayout = 'flex-col justify-center items-center';
+            textAlignmentClass = 'items-center mt-4';
+          } else {
+            // left-image default
+            containerLayout = 'flex-col md:flex-row-reverse';
+            textAlignmentClass = 'items-center md:items-start md:pr-6 lg:pr-12';
+          }
+
+          let alignClass = 'text-left';
+          if (slide.textAlignment === 'center' || (!slide.textAlignment && slide.layout === 'center')) alignClass = 'text-center';
+          if (slide.textAlignment === 'right') alignClass = 'text-right';
+          if (slide.textAlignment === 'left') alignClass = 'text-left';
+          
+          if (slide.layout === 'center' && !slide.textAlignment) alignClass = 'text-center';
+          else if (!slide.textAlignment && slide.layout !== 'center') alignClass = 'text-center md:text-left';
+
+          textAlignmentClass = `${alignClass} ${textAlignmentClass}`;
+
+          let bgStyle = '';
+          switch(slide.background) {
+            case 'white-premium': bgStyle = 'bg-white'; break;
+            case 'beige-luxury': bgStyle = 'bg-[#FDFBF7]'; break;
+            case 'palace': bgStyle = 'bg-gradient-to-b from-[#F9F6F0] to-[#F1EAD7]'; break;
+            case 'dark-luxury': bgStyle = 'bg-brand-dark'; break;
+            case 'minimal': bgStyle = 'bg-gray-50'; break;
+            case 'transparent': bgStyle = 'bg-transparent'; break;
+            // New premium styles
+            case 'luxury-palace-interior': bgStyle = 'bg-gradient-to-b from-[#EFE5D9] to-[#FDFBF7]'; break;
+            case 'heritage-haveli': bgStyle = 'bg-[#F4F0E6]'; break;
+            case 'royal-archways': bgStyle = 'bg-gradient-to-b from-[#F9F6F0] to-[#E6DBC8]'; break;
+            case 'marble-floor-shadows': bgStyle = 'bg-[#FDFBF7]'; break;
+            case 'silk-fabric-texture': bgStyle = 'bg-[#F7EFE5]'; break;
+            case 'premium-beige-gradient': bgStyle = 'bg-[#D6D3CB]'; break; // Exact match to image base color
+            case 'warm-ivory-luxury': bgStyle = 'bg-[#FAF8F5]'; break;
+            case 'golden-ambient-lighting': bgStyle = 'bg-gradient-to-tr from-[#EAD9C0] to-[#FDFBF7]'; break;
+            case 'traditional-jharokha-windows': bgStyle = 'bg-[#F2EFE9]'; break;
+            case 'floral-luxury-decor': bgStyle = 'bg-[#F9F6F0]'; break;
+            case 'soft-bokeh-lighting': bgStyle = 'bg-[#FDFBF7]'; break;
+            case 'minimal-editorial-fashion': bgStyle = 'bg-white'; break;
+            default: bgStyle = 'bg-[#FDFBF7]';
+          }
+
+          let waveColor = '';
+          let archColor = '';
+          let archBorder = '';
+          let showArch = false;
+          
+          if (['premium-beige-gradient', 'white-premium', 'golden-ambient-lighting', 'dark-luxury'].includes(slide.background)) {
+            showArch = true;
+            if (slide.background === 'premium-beige-gradient') {
+              waveColor = '#E2DFD8';
+              archColor = 'bg-[#E1DFD7]';
+              archBorder = 'border-black/10';
+            } else if (slide.background === 'white-premium') {
+              waveColor = '#F7F7F7';
+              archColor = 'bg-[#F9F9F9]';
+              archBorder = 'border-black/5';
+            } else if (slide.background === 'golden-ambient-lighting') {
+              waveColor = '#E3CBA8';
+              archColor = 'bg-[#EAD4B3]';
+              archBorder = 'border-black/10';
+            } else if (slide.background === 'dark-luxury') {
+              waveColor = '#242424';
+              archColor = 'bg-[#1F1F1F]';
+              archBorder = 'border-white/10';
+            }
+          }
+
+          const isDark = slide.background === 'dark-luxury';
+          const textColor = isDark ? 'text-white' : 'text-brand-dark';
+          const mutedColor = isDark ? 'text-white/70' : 'text-brand-muted';
 
           return (
             <div
               key={slide._id || index}
-              className={`absolute inset-0 transition-opacity duration-1000 ease-in-out flex flex-col md:flex-row px-4 sm:px-12 md:px-16 lg:px-24 py-8 md:py-16 lg:py-20 ${
+              className={`absolute inset-0 transition-opacity duration-1000 ease-in-out flex px-4 sm:px-12 md:px-16 lg:px-24 py-8 md:py-16 lg:py-20 ${containerLayout} ${bgStyle} ${
                 activeBannerIndex === index ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
               }`}
             >
-              {/* Image Mobile (Top) / Desktop (Right Side 45%) */}
-              <div className="w-full md:w-[45%] h-[45%] md:h-full relative order-1 md:order-2 overflow-visible z-10 flex items-end justify-center md:justify-start lg:justify-center">
-                
-                {/* Decorative Background Elements behind the active model */}
-                <div className="absolute bottom-0 w-full h-[95%] flex items-end justify-center md:justify-start lg:justify-center pointer-events-none z-0">
-                  {/* Subtle radial golden glow */}
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(212,175,55,0.18)_0%,_transparent_60%)]"></div>
-                  {/* Large decorative arch */}
-                  <div className="w-[85%] md:w-[95%] lg:w-[85%] h-full border border-brand-gold/20 rounded-t-full bg-[#FDFBF7]/30 backdrop-blur-[2px] relative overflow-hidden shadow-[0_0_40px_rgba(212,175,55,0.05)]">
-                    <div className="absolute inset-0 bg-gradient-to-b from-brand-gold/10 to-transparent"></div>
-                  </div>
-                </div>
+              {/* Custom Background Image with Ken Burns */}
+              {slide.backgroundImage && (
+                <motion.div 
+                  initial={{ scale: 1, opacity: 0 }} 
+                  animate={activeBannerIndex === index ? { scale: 1.05, opacity: 0.3 } : { opacity: 0 }} 
+                  transition={{ duration: 8, ease: "linear" }}
+                  className="absolute inset-0 z-0 origin-center"
+                >
+                  <img src={slide.backgroundImage} alt="Background" className="w-full h-full object-cover mix-blend-multiply" />
+                </motion.div>
+              )}
 
+              {/* Gradient Overlay */}
+              {slide.gradientOverlay === 'soft-radial' && (
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-white/60 via-transparent to-transparent z-0"></div>
+              )}
+              {slide.gradientOverlay === 'dark-vignette' && (
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-transparent via-transparent to-black/20 z-0"></div>
+              )}
+              {slide.gradientOverlay === 'golden-glow' && (
+                <div className="absolute inset-0 bg-gradient-to-tr from-[#D4AF37]/10 via-transparent to-transparent z-0"></div>
+              )}
+              {slide.gradientOverlay === 'warm-overlay' && (
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#EAD9C0]/20 to-[#EAD9C0]/40 z-0"></div>
+              )}
+              
+              {/* Decorative Theme */}
+              {slide.decorativeTheme === 'floral-watermark' && (
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/floral-texture.png')] opacity-[0.03] z-0 mix-blend-multiply pointer-events-none"></div>
+              )}
+
+              {/* Background Decor */}
+              {showArch && (
+                <svg className="absolute top-0 left-0 w-full h-[80%] z-0 pointer-events-none opacity-80" preserveAspectRatio="none" viewBox="0 0 1440 600" fill="none">
+                  <path d="M0 0H1440V200C1100 450 400 150 0 550V0Z" fill={waveColor} />
+                </svg>
+              )}
+              
+              {(slide.background === 'palace' || slide.background === 'luxury-palace-interior') && (
+                <div className="absolute bottom-0 w-full md:w-[80%] h-[95%] left-1/2 -translate-x-1/2 border border-brand-gold/20 rounded-t-full bg-white/20 pointer-events-none z-0"></div>
+              )}
+
+              {/* Image Area */}
+              <div className={`relative z-10 flex items-end justify-center ${slide.layout === 'center' ? 'w-full h-[60%]' : 'w-full md:w-1/2 h-[50%] md:h-full'}`}>
+                {/* Arch Background Decor */}
+                {showArch && (
+                  <div className={`absolute bottom-0 w-[95%] sm:w-[85%] md:w-[80%] h-[92%] border-[1px] rounded-t-full z-[-1] pointer-events-none ${archColor} ${archBorder}`}></div>
+                )}
                 <motion.div
-                  className="relative w-full h-full max-h-[105%] md:max-h-[100%] flex items-end justify-center md:justify-start lg:justify-center z-10"
+                  className="relative w-full h-full flex items-end justify-center"
                   initial={{ opacity: 0, y: 15 }}
                   animate={activeBannerIndex === index ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
                   transition={{ opacity: { duration: 1.2 }, y: { duration: 1.2, ease: "easeOut" } }}
                 >
                   <img
-                    src={slide.imageUrl}
-                    alt={slide.title}
-                    className="w-auto h-full object-contain object-bottom scale-[1.05] md:scale-[1.08] lg:scale-110 origin-bottom drop-shadow-2xl"
+                    src={displayImage}
+                    alt={displayTitle}
+                    className={`relative z-10 w-auto h-full object-contain object-bottom drop-shadow-2xl ${slide.layout === 'center' ? 'max-h-full' : 'scale-[1.05] md:scale-[1.08] lg:scale-110 origin-bottom'}`}
                   />
+                  {/* Model Floor Shadow */}
+                  <div className="absolute bottom-0 w-[50%] md:w-[60%] h-4 bg-black/40 blur-[12px] rounded-[100%] z-0 translate-y-1" />
                 </motion.div>
               </div>
 
-              {/* Text Mobile (Bottom) / Desktop (Left Side 55%) */}
-              <div className="w-full md:w-[55%] h-[55%] md:h-full flex flex-col justify-center text-center md:text-left z-20 order-2 md:order-1 pt-6 md:pt-0 md:pl-6 lg:pl-12">
+              {/* Text Area */}
+              <div className={`relative z-20 flex flex-col justify-center ${textAlignmentClass} ${slide.layout === 'center' ? 'w-full h-[40%]' : 'w-full md:w-1/2 h-[50%] md:h-full'}`}>
                 <AnimatePresence mode="wait">
                   {activeBannerIndex === index && (
                     <motion.div
@@ -412,75 +508,99 @@ export default function Home() {
                         initial: {},
                         animate: { transition: { staggerChildren: 0.12 } }
                       }}
-                      className="max-w-[580px] mx-auto md:mx-0 space-y-5 md:space-y-6 flex flex-col items-center md:items-start"
+                      className="max-w-[580px] w-full space-y-6 md:space-y-8 flex flex-col"
                     >
-                      {/* Small Collection Label */}
-                      <motion.div 
-                        variants={{ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
-                        className="inline-block"
-                      >
-                        <span className="text-[10px] sm:text-xs font-bold tracking-[0.3em] uppercase text-brand-dark/70 flex items-center justify-center md:justify-start">
-                          <span className="w-8 h-px bg-brand-gold mr-3 hidden md:block"></span>
-                          {extraData.badge}
-                          <span className="w-8 h-px bg-brand-gold ml-3 md:hidden block"></span>
-                        </span>
-                      </motion.div>
-
-                      {/* Large Luxury Heading */}
-                      <motion.div 
-                        variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
-                        className="font-display leading-[1.05] text-brand-dark flex flex-col space-y-1"
-                      >
-                        <span className="text-3xl sm:text-4xl md:text-[3.2rem] lg:text-[4rem] tracking-tight font-medium drop-shadow-sm">{extraData.titleSplit[0]}</span>
-                        <span className="text-3xl sm:text-4xl md:text-[3.2rem] lg:text-[4rem] italic text-brand-gold font-light">{extraData.titleSplit[1] || slide.title}</span>
-                      </motion.div>
-
-                      {/* Elegant Description */}
-                      <motion.p 
-                        variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
-                        className="font-sans text-xs sm:text-sm md:text-base text-brand-muted leading-relaxed font-light md:pr-10"
-                      >
-                        {extraData.description}
-                      </motion.p>
-
-                      {/* Feature Chips */}
-                      <motion.div 
-                        variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
-                        className="flex flex-wrap justify-center md:justify-start gap-2 pt-1"
-                      >
-                        {extraData.chips.map((chip, idx) => (
-                          <span key={idx} className="text-[9px] sm:text-[10px] px-3 py-1 bg-brand-white/60 border border-brand-border/40 text-brand-dark/70 uppercase tracking-widest rounded-sm backdrop-blur-sm">
-                            {chip}
+                      {displayBadge && (
+                        <motion.div 
+                          variants={{ initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
+                          className={`inline-block ${slide.layout === 'center' || alignClass.includes('text-center') ? 'mx-auto' : (alignClass.includes('text-right') ? 'ml-auto' : 'mr-auto')}`}
+                        >
+                          <span className={`text-[10px] sm:text-xs font-bold tracking-[0.3em] uppercase ${isDark ? 'text-white/80' : 'text-brand-dark/70'} flex items-center justify-center`}>
+                            {alignClass.includes('text-center') || alignClass.includes('text-right') ? <span className="w-8 h-px bg-brand-gold mr-3 hidden md:block"></span> : null}
+                            {displayBadge}
+                            {alignClass.includes('text-center') || alignClass.includes('text-left') ? <span className="w-8 h-px bg-brand-gold ml-3 hidden md:block"></span> : null}
                           </span>
-                        ))}
-                      </motion.div>
+                        </motion.div>
+                      )}
 
-                      {/* Price */}
                       <motion.div 
                         variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
-                        className="flex items-center space-x-4 pt-4"
+                        className={`font-display leading-[1.05] ${textColor} flex flex-col space-y-1`}
                       >
-                        <span className="text-xl sm:text-2xl md:text-3xl font-display font-medium text-brand-dark">{extraData.price}</span>
-                        <span className="text-xs sm:text-sm md:text-base text-brand-muted/70 line-through decoration-brand-muted/40 decoration-1">{extraData.originalPrice}</span>
+                        <span className="text-3xl sm:text-4xl md:text-[3.2rem] lg:text-[4rem] tracking-tight font-medium drop-shadow-sm">{titleFirstPart}</span>
+                        {titleSecondPart && <span className="text-3xl sm:text-4xl md:text-[3.2rem] lg:text-[4rem] italic text-brand-gold font-light">{titleSecondPart}</span>}
                       </motion.div>
 
-                      {/* Buttons */}
+                      {displaySubtitle && (
+                        <motion.p 
+                          variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
+                          className={`font-sans text-xs sm:text-sm md:text-base ${mutedColor} leading-relaxed font-light`}
+                        >
+                          {displaySubtitle}
+                        </motion.p>
+                      )}
+
+                      {/* Feature Checklist */}
+                      {displayFeatures && displayFeatures.length > 0 && (
+                        <motion.ul 
+                          variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
+                          className={`grid grid-cols-2 gap-y-3 gap-x-4 text-[11px] sm:text-xs font-sans ${mutedColor}`}
+                        >
+                          {displayFeatures.map((feature, idx) => (
+                            <li key={idx} className={`flex items-center ${alignClass.includes('text-center') ? 'justify-center' : alignClass.includes('text-right') ? 'justify-end' : 'justify-start'}`}>
+                              <Check className="w-4 h-4 text-brand-gold mr-2 shrink-0" />
+                              <span className="tracking-wide">{feature}</span>
+                            </li>
+                          ))}
+                        </motion.ul>
+                      )}
+
+                      {/* Chips */}
+                      {displayChips && displayChips.length > 0 && (
+                        <motion.div 
+                          variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
+                          className={`flex flex-wrap gap-2 pt-1 ${alignClass.includes('text-center') ? 'justify-center' : alignClass.includes('text-right') ? 'justify-end' : 'justify-start'}`}
+                        >
+                          {displayChips.map((chip, idx) => (
+                            <span key={idx} className={`border border-black/5 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full ${isDark ? 'bg-white/10 text-white' : 'bg-brand-cream/80 text-brand-dark'}`}>
+                              {chip}
+                            </span>
+                          ))}
+                        </motion.div>
+                      )}
+
+                      {/* Pricing */}
+                      {displayPrice && (
+                        <motion.div 
+                          variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
+                          className={`flex items-baseline space-x-3 pt-3 ${alignClass.includes('text-center') ? 'justify-center' : alignClass.includes('text-right') ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <span className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest ${mutedColor}`}>Starting From</span>
+                          <div className="flex items-center space-x-3">
+                            <span className={`text-3xl sm:text-4xl md:text-5xl font-display font-bold ${textColor} tracking-tight`}>₹{displayPrice}</span>
+                            {originalPrice && <span className={`text-sm sm:text-base md:text-lg font-sans tracking-wide text-brand-dark/40 line-through decoration-1`}>{originalPrice}</span>}
+                          </div>
+                        </motion.div>
+                      )}
+
                       <motion.div 
                         variants={{ initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}
-                        className="flex flex-row items-center space-x-3 sm:space-x-4 pt-4 w-full justify-center md:justify-start"
+                        className={`flex flex-row items-center space-x-3 sm:space-x-4 pt-4 w-full ${alignClass.includes('text-center') ? 'justify-center' : alignClass.includes('text-right') ? 'justify-end' : 'justify-center md:justify-start'}`}
                       >
                         <Link
-                          to={slide.ctaLink}
-                          className="bg-brand-dark text-brand-cream px-6 sm:px-10 py-3.5 sm:py-4 rounded-sm text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em] transition-all duration-300 shadow-[0_4px_14px_0_rgba(0,0,0,0.1)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.15)] hover:bg-brand-crimson whitespace-nowrap"
+                          to={ctaLink}
+                          className={`bg-[#18110D] text-brand-cream px-8 sm:px-12 py-3.5 sm:py-4 rounded-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.25em] transition-all duration-300 shadow-sm hover:shadow-md hover:bg-black whitespace-nowrap ${isDark ? 'bg-white text-brand-dark hover:bg-brand-cream' : ''}`}
                         >
-                          {slide.ctaText || 'Explore Collection'}
+                          {ctaText}
                         </Link>
-                        <Link
-                          to="/shop"
-                          className="bg-brand-white/50 border border-brand-dark/20 text-brand-dark px-6 sm:px-10 py-3.5 sm:py-4 rounded-sm text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em] transition-all duration-300 hover:bg-brand-white hover:border-brand-dark/40 whitespace-nowrap backdrop-blur-sm"
-                        >
-                          View All
-                        </Link>
+                        {secondaryBtnText && (
+                          <Link
+                            to={secondaryBtnLink}
+                            className={`bg-black/5 border border-black/10 text-brand-dark px-8 sm:px-12 py-3.5 sm:py-4 rounded-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.25em] transition-all duration-300 whitespace-nowrap hover:bg-black/10 ${isDark ? 'border-white/20 bg-white/10 text-white hover:bg-white/20' : ''}`}
+                          >
+                            {secondaryBtnText}
+                          </Link>
+                        )}
                       </motion.div>
                     </motion.div>
                   )}
@@ -917,122 +1037,7 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* Lead Capture Popup Modal */}
-      <AnimatePresence>
-        {showPopup && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs select-none">
-            {/* Modal Box */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-4xl bg-[#FFF8F0] rounded-xl shadow-2xl overflow-hidden flex flex-col md:flex-row border border-[#E8D5C4]/30 h-[80vh] md:h-auto max-h-[600px] text-left"
-            >
-              {/* Close Button */}
-              <button
-                onClick={handlePopupDismiss}
-                className="absolute top-4 right-4 z-20 p-2 text-[#1A0505]/60 hover:text-[#1A0505] transition-colors bg-white/20 md:bg-transparent rounded-full"
-                aria-label="Close modal"
-              >
-                <X size={20} />
-              </button>
 
-              {/* Left Side: Image panel (Saree models & discount) */}
-              <div className="w-full md:w-1/2 relative bg-[#1A0505] h-2/5 md:h-auto overflow-hidden">
-                <img
-                  src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=800"
-                  alt="Special saree collections discount banner"
-                  className="w-full h-full object-cover object-top"
-                />
-                {/* Floating overlays for discount */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#1A0505]/90 via-[#1A0505]/20 to-transparent flex flex-col justify-end p-6 text-left">
-                  <span className="font-display text-2xl sm:text-3xl text-[#FFF8F0] font-bold leading-tight">
-                    Most-wanted <span className="italic font-normal">saree</span> collection!
-                  </span>
-                  <div className="mt-3 inline-flex items-center space-x-2 bg-[#8B1A1A] text-[#FFF8F0] px-3 py-1.5 rounded border border-[#C8832A]/30 self-start text-xs font-bold uppercase tracking-wider">
-                    <span>Get UPTO 50% OFF</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Side: Beige form panel */}
-              <div className="w-full md:w-1/2 p-8 sm:p-12 flex flex-col justify-center text-left space-y-6 h-3/5 md:h-auto bg-[#E8D5C4]/30">
-                {!popupSuccess ? (
-                  <form onSubmit={handlePopupSubmit} className="space-y-4">
-                    <div className="space-y-1">
-                      <h3 className="font-display font-bold text-xl sm:text-2xl text-[#1A0505] tracking-wide">
-                        Drapes Everyone's Obsessed With!
-                      </h3>
-                      <p className="text-xs text-[#6B3A3A] font-sans leading-relaxed">
-                        Subscribe to get exclusive collections, custom sizes updates, and first-order discount codes!
-                      </p>
-                    </div>
-
-                    <div className="space-y-3">
-                      {/* Email Address */}
-                      <div className="flex flex-col">
-                        <input
-                          type="email"
-                          required
-                          value={popupEmail}
-                          onChange={(e) => setPopupEmail(e.target.value)}
-                          placeholder="Enter your email"
-                          className="bg-[#FFF8F0]/80 border border-[#E8D5C4]/60 p-3 rounded text-xs focus:outline-none focus:border-[#C8832A] text-[#1A0505] placeholder-[#6B3A3A]/50"
-                        />
-                      </div>
-
-                      {/* WhatsApp / Phone */}
-                      <div className="flex space-x-2">
-                        <div className="flex bg-[#FFF8F0]/80 border border-[#E8D5C4]/60 rounded px-3 py-2 items-center space-x-1.5 select-none shrink-0 text-xs">
-                          <span>🇮🇳</span>
-                          <span className="font-semibold text-[#1A0505]">+91</span>
-                        </div>
-                        <input
-                          type="tel"
-                          pattern="[0-9]{10}"
-                          title="Please enter a valid 10-digit number"
-                          value={popupPhone}
-                          onChange={(e) => setPopupPhone(e.target.value)}
-                          placeholder="Whatsapp Number"
-                          className="flex-grow bg-[#FFF8F0]/80 border border-[#E8D5C4]/60 p-3 rounded text-xs focus:outline-none focus:border-[#C8832A] text-[#1A0505] placeholder-[#6B3A3A]/50"
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={popupSubmitting}
-                      className="w-full bg-[#5C2E2E] hover:bg-[#1A0505] text-[#FFF8F0] py-3 rounded text-xs font-semibold uppercase tracking-widest transition-colors duration-300 shadow-md flex items-center justify-center"
-                    >
-                      {popupSubmitting ? 'Joining...' : 'Join Swastika Family'}
-                    </button>
-                    
-                    <div className="text-center pt-2 select-none">
-                      <span className="text-[10px] text-[#6B3A3A]/60 font-sans tracking-wide">
-                        Powered by <strong className="font-bold text-[#6B3A3A]/80">Swastika Sarees</strong>
-                      </span>
-                    </div>
-                  </form>
-                ) : (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="text-center py-10 space-y-4"
-                  >
-                    <span className="text-4xl">🎉</span>
-                    <h3 className="font-display font-bold text-2xl text-[#1A0505]">
-                      Welcome to the Family!
-                    </h3>
-                    <p className="text-xs text-[#6B3A3A] font-sans max-w-xs mx-auto leading-relaxed">
-                      Thank you for subscribing. We will send exclusive offers and updates directly to your inbox and WhatsApp!
-                    </p>
-                  </motion.div>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
     </div>
   );
