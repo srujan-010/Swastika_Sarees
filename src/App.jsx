@@ -72,14 +72,56 @@ function AnimatedRoutes() {
           <Route path="/returns" element={<ReturnsPolicy />} />
           <Route path="/shipping" element={<ShippingPolicy />} />
           
-          {/* Admin CMS Route */}
-          <Route path="/admin" element={<Admin />} />
-
           {/* Fallback 404 Route */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </motion.main>
     </AnimatePresence>
+  );
+}
+
+function AppContent({ scaleX }) {
+  const location = useLocation();
+  const isAdmin = location.pathname.startsWith('/admin');
+
+  if (isAdmin) {
+    return (
+      <div className="font-sans min-h-screen bg-brand-cream/30">
+        <ScrollToTop />
+        <Routes>
+          <Route path="/admin" element={<Admin />} />
+        </Routes>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <ScrollToTop />
+      {/* Scroll Progress Bar */}
+      <motion.div
+        className="scroll-progress-bar"
+        style={{ scaleX }}
+      />
+      
+      {/* Dynamic Store Layout Wrapper with Ambient Glow */}
+      <div className="flex flex-col min-h-screen bg-brand-cream/15 font-sans relative overflow-hidden">
+        {/* Ambient background that moves softly */}
+        <div className="absolute inset-0 ambient-glow-bg pointer-events-none" />
+        
+        {/* Global Announcement bar */}
+        <AnnouncementBar />
+
+        {/* Sticky Header Navbar */}
+        <Navbar />
+
+        {/* Storefront Main View Routing */}
+        <AnimatedRoutes />
+
+        {/* Global Foot Block */}
+        <Footer />
+      </div>
+    </>
   );
 }
 
@@ -101,33 +143,7 @@ export default function App() {
 
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <ScrollToTop />
-      
-      {/* Scroll Progress Bar */}
-      <motion.div
-        className="scroll-progress-bar"
-        style={{ scaleX }}
-      />
-      
-      {/* Dynamic Store Layout Wrapper with Ambient Glow */}
-      <div className="flex flex-col min-h-screen bg-brand-cream/15 font-sans relative overflow-hidden">
-        {/* Ambient background that moves softly */}
-        <div className="absolute inset-0 ambient-glow-bg pointer-events-none" />
-        
-        {/* Global Announcement bar */}
-        <AnnouncementBar />
-
-        {/* Sticky Header Navbar */}
-        <Navbar />
-
-        {/* Storefront Main View Routing */}
-        <AnimatedRoutes />
-
-
-        {/* Global Foot Block */}
-        <Footer />
-
-      </div>
+      <AppContent scaleX={scaleX} />
     </Router>
   );
 }

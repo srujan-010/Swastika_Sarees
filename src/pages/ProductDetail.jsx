@@ -99,9 +99,10 @@ export default function ProductDetail() {
     setRecentlyViewed(cached.filter(p => p.slug !== slug).slice(0, 8));
   }, [slug]);
 
-  // Reset active image index when color changes
+  // Reset active image index and size when color changes
   useEffect(() => {
     setActiveImageIndex(0);
+    setSelectedSize(null);
   }, [selectedColor]);
 
   // Preload primary images of all variants for smooth switching
@@ -148,9 +149,11 @@ export default function ProductDetail() {
 
   const isSaved = isInWishlist(product._id);
 
-  const activeVariant = product?.variants?.find(v => 
-    v.colorName === selectedColor && (selectedSize ? v.size === selectedSize : true)
-  ) || product?.variants?.find(v => v.colorName === selectedColor);
+  // Get the selected variant color group
+  const activeVariant = product?.variants?.find(v => v.colorName === selectedColor) || product?.variants?.[0];
+  
+  // Find the selected size object within that color group
+  const activeSizeObj = activeVariant?.sizes?.find(s => s.size === selectedSize) || null;
 
   const images = activeVariant?.images?.length > 0 
     ? activeVariant.images 
@@ -158,15 +161,26 @@ export default function ProductDetail() {
 
   const safeImageIndex = Math.min(activeImageIndex, Math.max(0, images.length - 1));
 
+  const displaySku = activeSizeObj?.variantSku || activeVariant?.variantSku || product.sku;
+  
+  // Total stock calculation for Kurti vs Saree
+  let displayStock = 0;
+  if (product.category?.slug !== 'sarees' && product.variants?.length > 0) {
+    if (selectedSize && activeSizeObj) {
+      displayStock = activeSizeObj.stock;
+    } else if (activeVariant) {
+       // If no size selected, sum all sizes for this color to show total available
+       displayStock = activeVariant.sizes?.reduce((sum, s) => sum + (s.stock || 0), 0) || 0;
+    }
+  } else {
+    displayStock = activeVariant?.stock !== undefined ? activeVariant.stock : product.stock;
+  }
 
-
-  const displaySku = activeVariant?.variantSku || product.sku;
-  const displayStock = activeVariant?.stock !== undefined ? activeVariant.stock : product.stock;
   const displayAvailability = activeVariant?.availability || product.availability || 'Single Ready';
   const displayVideo = activeVariant?.video || product.productVideo;
   
   const basePrice = product.price / 100;
-  const extraPrice = activeVariant?.extraPricePaise ? activeVariant.extraPricePaise / 100 : 0;
+  const extraPrice = activeSizeObj?.extraPricePaise ? activeSizeObj.extraPricePaise / 100 : 0;
   const currentPrice = basePrice + extraPrice;
   const originalPrice = product.originalPrice ? (product.originalPrice / 100) + extraPrice : null;
   const discountPercent = originalPrice ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0;
@@ -195,16 +209,20 @@ export default function ProductDetail() {
         colorsMap.set(v.colorName, {
           hex: v.colorHex,
           imageUrl: variantImageUrl,
-          availability: v.availability || product.availability || 'Single Ready'
+          availability: v.availability || product.availability || 'Single Ready',
+          sizes: v.sizes || []
         });
       }
-      if (v.size && !sizesMap.has(v.size)) sizesMap.set(v.size, true);
     });
   }
 
   const uniqueColors = Array.from(colorsMap.entries()).map(([name, data]) => ({ name, ...data }));
-  const uniqueSizes = Array.from(sizesMap.keys());
+  
+  // Sizes are derived from the selected color's available sizes
   const showSize = product.showSizeChart !== false && product.category?.slug !== 'sarees';
+  const uniqueSizes = showSize && activeVariant && activeVariant.sizes 
+    ? activeVariant.sizes.map(s => s) 
+    : [];
 
   const handleAddToCart = () => {
     addItem({
@@ -214,9 +232,9 @@ export default function ProductDetail() {
       price: currentPrice,
       quantity,
       color: selectedColor,
-      size: selectedSize,
+      size: showSize ? selectedSize : null,
       imageUrl: images[0]?.url,
-      stock: product.stock
+      stock: displayStock
     });
   };
 
@@ -496,22 +514,41 @@ export default function ProductDetail() {
             {showSize && uniqueSizes.length > 0 && (
               <div>
                 <span className="block text-xs font-bold text-brand-dark uppercase tracking-wider mb-2.5">
-                  Select Size: <span className="text-brand-gold font-sans">{selectedSize}</span>
+                  Select Size: <span className="text-brand-gold font-sans">{selectedSize || 'Choose a size'}</span>
                 </span>
-                <div className="flex flex-wrap gap-2 font-sans">
-                  {uniqueSizes.map((size) => (
-                    <button
-                      key={size}
-                      onClick={() => setSelectedSize(size)}
-                      className={`px-4 py-2 rounded border text-xs font-semibold transition-all ${
-                        selectedSize === size
-                          ? 'bg-brand-crimson text-brand-cream border-brand-crimson shadow-sm'
-                          : 'bg-brand-white border-brand-border text-brand-dark hover:border-brand-crimson'
-                      }`}
-                    >
-                      {size}
-                    </button>
-                  ))}
+                <div className="flex flex-wrap gap-3 font-sans">
+                  {uniqueSizes.map((sObj) => {
+                    const size = sObj.size;
+                    const stock = sObj.stock || 0;
+                    const isSelected = selectedSize === size;
+                    const isOutOfStockSize = stock === 0;
+
+                    return (
+                      <button
+                        key={size}
+                        onClick={() => {
+                          if (!isOutOfStockSize) setSelectedSize(size);
+                        }}
+                        disabled={isOutOfStockSize}
+                        className={`relative px-5 py-2.5 rounded-full border text-xs font-bold tracking-wide transition-all ${
+                          isSelected
+                            ? 'bg-brand-crimson text-brand-cream border-brand-crimson shadow-md scale-[1.02]'
+                            : isOutOfStockSize
+                              ? 'bg-brand-muted/10 text-brand-muted/40 border-brand-muted/20 cursor-not-allowed line-through'
+                              : 'bg-brand-white border-brand-border text-brand-dark hover:border-brand-crimson hover:text-brand-crimson hover:shadow-xs'
+                        }`}
+                        title={isOutOfStockSize ? 'Out of Stock' : ''}
+                      >
+                        {size}
+                        {isSelected && (
+                          <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-gold opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-brand-gold"></span>
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -544,16 +581,16 @@ export default function ProductDetail() {
           <div className="flex flex-col sm:flex-row gap-3 mb-6 select-none">
             <button
               onClick={handleAddToCart}
-              disabled={displayStock === 0}
-              className="flex-1 bg-brand-crimson hover:bg-brand-muted disabled:bg-brand-muted/20 text-brand-cream py-3.5 rounded-lg flex items-center justify-center space-x-2 font-semibold transition-colors shadow-md border border-brand-gold/30 disabled:border-none"
+              disabled={displayStock === 0 || (showSize && !selectedSize)}
+              className="flex-1 bg-brand-crimson hover:bg-brand-muted disabled:bg-brand-muted/40 disabled:cursor-not-allowed text-brand-cream py-3.5 rounded-lg flex items-center justify-center space-x-2 font-semibold transition-colors shadow-md border border-brand-gold/30 disabled:border-none"
             >
               <ShoppingBag size={18} />
-              <span>Add to Cart</span>
+              <span>{(showSize && !selectedSize) ? 'Select Size' : (displayStock === 0 ? 'Out of Stock' : 'Add to Cart')}</span>
             </button>
             <button
               onClick={handleBuyNow}
-              disabled={displayStock === 0}
-              className="flex-1 bg-brand-gold hover:bg-brand-gold-light disabled:bg-brand-gold/20 text-brand-dark py-3.5 rounded-lg flex items-center justify-center space-x-2 font-semibold transition-colors shadow-md"
+              disabled={displayStock === 0 || (showSize && !selectedSize)}
+              className="flex-1 bg-brand-gold hover:bg-brand-gold-light disabled:bg-brand-muted/20 disabled:cursor-not-allowed text-brand-dark py-3.5 rounded-lg flex items-center justify-center space-x-2 font-semibold transition-colors shadow-md"
             >
               <span>Buy Now</span>
             </button>
@@ -721,29 +758,43 @@ export default function ProductDetail() {
                 </div>
               )}
 
-              {/* Saree Specifications Table */}
-              {(product.sareeLength || product.sareeWidth || product.sareeWeight || product.blousePiece || product.latkan) && (
-                <div className="mt-6 border-t border-brand-border/40 pt-6">
-                  <h5 className="font-display font-semibold text-brand-dark mb-3 text-sm">Specifications</h5>
-                  <div className="bg-brand-cream/30 rounded-lg overflow-hidden border border-brand-border/50 text-sm w-full md:w-2/3 lg:w-1/2">
-                    {product.sareeLength && (
-                      <div className="flex border-b border-brand-border/50 last:border-0"><div className="w-1/3 bg-brand-cream/50 p-3 font-semibold text-brand-dark">Saree Length</div><div className="w-2/3 p-3 text-brand-muted">{product.sareeLength}</div></div>
-                    )}
-                    {product.sareeWidth && (
-                      <div className="flex border-b border-brand-border/50 last:border-0"><div className="w-1/3 bg-brand-cream/50 p-3 font-semibold text-brand-dark">Saree Width</div><div className="w-2/3 p-3 text-brand-muted">{product.sareeWidth}</div></div>
-                    )}
-                    {product.sareeWeight && (
-                      <div className="flex border-b border-brand-border/50 last:border-0"><div className="w-1/3 bg-brand-cream/50 p-3 font-semibold text-brand-dark">Weight</div><div className="w-2/3 p-3 text-brand-muted">{product.sareeWeight}</div></div>
-                    )}
-                    {product.blousePiece && (
-                      <div className="flex border-b border-brand-border/50 last:border-0"><div className="w-1/3 bg-brand-cream/50 p-3 font-semibold text-brand-dark">Blouse Piece</div><div className="w-2/3 p-3 text-brand-muted">{product.blousePiece} {product.blouseType && product.blousePiece === 'Included' ? `(${product.blouseType})` : ''}</div></div>
-                    )}
-                    {product.latkan && (
-                      <div className="flex border-b border-brand-border/50 last:border-0"><div className="w-1/3 bg-brand-cream/50 p-3 font-semibold text-brand-dark">Latkan</div><div className="w-2/3 p-3 text-brand-muted">{product.latkan}</div></div>
-                    )}
+              {/* Dynamic Specifications Table */}
+              {(() => {
+                const specs = product.specifications && Object.keys(product.specifications).length > 0 
+                  ? product.specifications 
+                  : {
+                      sareeLength: product.sareeLength,
+                      sareeWidth: product.sareeWidth,
+                      sareeWeight: product.sareeWeight,
+                      blousePiece: product.blousePiece ? `${product.blousePiece} ${product.blouseType && product.blousePiece === 'Included' ? `(${product.blouseType})` : ''}`.trim() : undefined,
+                      latkan: product.latkan
+                    };
+
+                // Filter out empty values
+                const validSpecs = Object.entries(specs).filter(([_, val]) => val && val !== '');
+
+                if (validSpecs.length === 0) return null;
+
+                const formatLabel = (key) => {
+                  return key
+                    .replace(/([A-Z])/g, ' $1')
+                    .replace(/^./, (str) => str.toUpperCase());
+                };
+
+                return (
+                  <div className="mt-6 border-t border-brand-border/40 pt-6">
+                    <h5 className="font-display font-semibold text-brand-dark mb-3 text-sm">Specifications</h5>
+                    <div className="bg-brand-cream/30 rounded-lg overflow-hidden border border-brand-border/50 text-sm w-full md:w-2/3 lg:w-1/2">
+                      {validSpecs.map(([key, val]) => (
+                        <div key={key} className="flex border-b border-brand-border/50 last:border-0">
+                          <div className="w-1/3 bg-brand-cream/50 p-3 font-semibold text-brand-dark">{formatLabel(key)}</div>
+                          <div className="w-2/3 p-3 text-brand-muted">{val}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Product Video */}
               {product.productVideo && (

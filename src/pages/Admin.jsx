@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/authStore';
 import { useProductAI } from '../hooks/useProductAI';
 import { detectVariantColor } from '../services/ai/colorDetection';
 import { uploadFileWithProgress } from '../utils/uploadHelpers';
+import AdminLayout from '../layouts/AdminLayout';
 
 // Import Recharts components for beautiful analytics
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
@@ -125,89 +126,7 @@ export default function Admin() {
   }
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-brand-cream/30">
-      
-      {/* Admin Sidebar Navigation */}
-      <aside className="w-full md:w-64 bg-brand-dark text-brand-cream py-8 px-4 shrink-0 select-none border-r border-brand-gold/20 flex flex-col justify-between">
-        <div>
-          <div className="border-b border-brand-muted/20 pb-4 mb-6 text-left px-2">
-            <span className="font-display font-bold text-xl text-brand-gold-light tracking-wide block">Swastika Admin</span>
-            <span className="text-[10px] text-brand-cream/60 uppercase tracking-widest font-sans mt-0.5 block">Store Management</span>
-          </div>
-
-          <nav className="space-y-1 text-xs md:text-sm font-sans font-medium">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'dashboard' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
-            >
-              <LayoutDashboard size={16} /> <span>Dashboard</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('products')}
-              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'products' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
-            >
-              <ShoppingBag size={16} /> <span>Products</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('categories')}
-              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'categories' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
-            >
-              <FolderHeart size={16} /> <span>Categories</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('orders')}
-              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'orders' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
-            >
-              <ListOrdered size={16} /> <span>Orders</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('customers')}
-              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'customers' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
-            >
-              <Users size={16} /> <span>Customers</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('coupons')}
-              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'coupons' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
-            >
-              <Ticket size={16} /> <span>Coupons</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('reviews')}
-              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'reviews' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
-            >
-              <MessageSquare size={16} /> <span>Reviews</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('homepage')}
-              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'homepage' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
-            >
-              <Image size={16} /> <span>Homepage Content</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('leads')}
-              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'leads' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
-            >
-              <Mail size={16} /> <span>Marketing Leads</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors ${activeTab === 'settings' ? 'bg-brand-crimson text-brand-cream' : 'hover:bg-brand-muted/40 hover:text-brand-gold'}`}
-            >
-              <Settings size={16} /> <span>Store Settings</span>
-            </button>
-          </nav>
-        </div>
-
-        <div className="px-2 pt-6 border-t border-brand-muted/20 font-sans text-2xs text-brand-cream/40">
-          Logged in: {user.email} <br />
-          Role: Admin
-        </div>
-      </aside>
-
-      {/* Main View Area */}
-      <main className="flex-1 p-6 sm:p-8">
-        
+    <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab} user={user} logout={logout}>
         {/* Tab 0: Access Denied */}
         {activeTab === 'denied' && <DeniedView />}
 
@@ -240,10 +159,7 @@ export default function Admin() {
 
         {/* Tab 10: Marketing Leads */}
         {activeTab === 'leads' && <LeadsView token={token} />}
-
-      </main>
-
-    </div>
+    </AdminLayout>
   );
 }
 
@@ -447,6 +363,50 @@ const PremiumUploadCard = ({ state, onRetry }) => {
   );
 };
 
+const CATEGORY_SPEC_CONFIG = {
+  'saree': [
+    { key: 'sareeLength', label: 'Saree Length', placeholder: 'e.g. 6.30 Meters', type: 'text' },
+    { key: 'sareeWidth', label: 'Saree Width', placeholder: 'e.g. 48 Inches', type: 'text' },
+    { key: 'sareeWeight', label: 'Saree Weight', placeholder: 'e.g. 480 Grams', type: 'text' },
+    { key: 'blousePiece', label: 'Blouse Piece', type: 'select', options: ['Included', 'Not Included'] },
+    { key: 'blouseType', label: 'Blouse Type', type: 'select', options: ['Running Blouse', 'Separate Blouse Piece', 'Designer Blouse', 'Plain Blouse', 'Not Applicable'] },
+    { key: 'latkan', label: 'Latkan', type: 'select', options: ['Included', 'Not Included'] },
+    { key: 'fabric', label: 'Fabric', placeholder: 'e.g. Pure Silk', type: 'text' }
+  ],
+  'kurti': [
+    { key: 'kurtiMaterial', label: 'Kurti Material', placeholder: 'e.g. Premium Cotton', type: 'text' },
+    { key: 'pantMaterial', label: 'Pant Material', placeholder: 'e.g. Premium Cotton', type: 'text' },
+    { key: 'dupattaMaterial', label: 'Dupatta Material', placeholder: 'e.g. Malmal Cotton', type: 'text' },
+    { key: 'kurtiLength', label: 'Kurti Length', placeholder: 'e.g. 46 inches', type: 'text' },
+    { key: 'pantLength', label: 'Pant Length', placeholder: 'e.g. 38 inches', type: 'text' },
+    { key: 'dupattaLength', label: 'Dupatta Length', placeholder: 'e.g. 2.2 mtr', type: 'text' },
+    { key: 'sleeveType', label: 'Sleeve Type', placeholder: 'e.g. 3/4 Sleeves', type: 'text' },
+    { key: 'neckType', label: 'Neck Type', placeholder: 'e.g. Round Neck', type: 'text' },
+    { key: 'pattern', label: 'Pattern', placeholder: 'e.g. Floral Print', type: 'text' },
+    { key: 'workType', label: 'Work Type', placeholder: 'e.g. Embroidery', type: 'text' },
+    { key: 'pieces', label: 'Number of Pieces', type: 'select', options: ['1 Piece (Kurti Only)', '2 Piece Set', '3 Piece Set'] },
+    { key: 'fit', label: 'Fit', type: 'select', options: ['Regular Fit', 'Slim Fit', 'Relaxed Fit', 'A-Line'] },
+    { key: 'occasion', label: 'Occasion', placeholder: 'e.g. Casual Wear', type: 'text' }
+  ],
+  'dress material': [
+    { key: 'topFabric', label: 'Top Fabric', placeholder: 'e.g. Pure Cotton', type: 'text' },
+    { key: 'bottomFabric', label: 'Bottom Fabric', placeholder: 'e.g. Pure Cotton', type: 'text' },
+    { key: 'dupattaFabric', label: 'Dupatta Fabric', placeholder: 'e.g. Chiffon', type: 'text' },
+    { key: 'topLength', label: 'Top Length', placeholder: 'e.g. 2.5 Meters', type: 'text' },
+    { key: 'bottomLength', label: 'Bottom Length', placeholder: 'e.g. 2.5 Meters', type: 'text' },
+    { key: 'dupattaLength', label: 'Dupatta Length', placeholder: 'e.g. 2.25 Meters', type: 'text' },
+    { key: 'pattern', label: 'Pattern', placeholder: 'e.g. Bandhani Print', type: 'text' },
+    { key: 'workType', label: 'Work Type', placeholder: 'e.g. Zari Work', type: 'text' }
+  ],
+  'accessori': [
+    { key: 'material', label: 'Material', placeholder: 'e.g. Alloy', type: 'text' },
+    { key: 'finish', label: 'Finish', placeholder: 'e.g. Gold Plated', type: 'text' },
+    { key: 'weight', label: 'Weight', placeholder: 'e.g. 50 Grams', type: 'text' },
+    { key: 'dimensions', label: 'Dimensions', placeholder: 'e.g. 2x2 Inches', type: 'text' },
+    { key: 'suitableFor', label: 'Suitable For', placeholder: 'e.g. Weddings, Parties', type: 'text' }
+  ]
+};
+
 // -----------------------
 // 2. PRODUCTS CRUD VIEW
 // -----------------------
@@ -500,7 +460,8 @@ function ProductsView({ token: tokenProp }) {
     dispatchTime: '',
     productVideo: '',
     productHighlights: [],
-    showSizeChart: true
+    showSizeChart: true,
+    specifications: {}
   });
   const [mainUploadState, setMainUploadState] = useState({
     isUploading: false, progress: 0, currentIndex: 0, totalFiles: 0,
@@ -514,6 +475,17 @@ function ProductsView({ token: tokenProp }) {
   const handleFieldChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setManuallyEditedFields(prev => new Set([...prev, field]));
+  };
+
+  const handleSpecChange = (key, value) => {
+    setFormData(prev => ({
+      ...prev,
+      specifications: {
+        ...(prev.specifications || {}),
+        [key]: value
+      }
+    }));
+    setManuallyEditedFields(prev => new Set([...prev, `specifications.${key}`]));
   };
 
   const getFieldClass = (fieldName, baseClass) => {
@@ -550,9 +522,38 @@ function ProductsView({ token: tokenProp }) {
           }
         }
       }
+      
+      if (result.extracted.variants && Array.isArray(result.extracted.variants) && result.extracted.variants.length > 0) {
+        newFormData.variants = result.extracted.variants.map((v, idx) => {
+           // Attempt to retain existing images if matching variant index exists
+           const existingVariant = formData.variants && formData.variants[idx] ? formData.variants[idx] : null;
+           
+           return {
+             colorName: v.colorName || '',
+             colorHex: v.colorHex || '#000000',
+             sizes: (v.sizes && v.sizes.length > 0) ? v.sizes.map(s => ({
+               size: s.size || 'Free Size',
+               stock: s.stock !== undefined ? s.stock : 10,
+               extraPricePaise: s.extraPrice ? s.extraPrice * 100 : 0, // AI returns rupees, we store paise in UI state before submit
+               variantSku: s.variantSku || ''
+             })) : [{ size: 'Free Size', stock: 10, extraPricePaise: 0, variantSku: '' }],
+             images: existingVariant ? existingVariant.images : [],
+             availability: '', video: '', colorManuallyEdited: false,
+             uploadState: { isUploading: false, aiStatus: 'success', aiMessage: `Extracted ${v.colorName || 'Variant'}` }
+           };
+        });
+      }
 
       Object.keys(result.extracted).forEach(key => {
-        if (formData.hasOwnProperty(key)) {
+        if (key === 'variants') return; // Handled above
+        if (key === 'specifications') {
+          newFormData.specifications = { ...newFormData.specifications };
+          Object.keys(result.extracted.specifications || {}).forEach(specKey => {
+            if (replaceExisting || !manuallyEditedFields.has(`specifications.${specKey}`)) {
+              newFormData.specifications[specKey] = result.extracted.specifications[specKey];
+            }
+          });
+        } else if (formData.hasOwnProperty(key)) {
           if (replaceExisting || !manuallyEditedFields.has(key)) {
             newFormData[key] = result.extracted[key];
           }
@@ -794,8 +795,39 @@ function ProductsView({ token: tokenProp }) {
   const addVariantRow = () => {
     setFormData(prev => ({
       ...prev,
-      variants: [...prev.variants, { colorName: '', colorHex: '#C8832A', size: 'Free Size', stock: 10, extraPricePaise: 0, variantSku: '', availability: '', video: '', images: [], colorManuallyEdited: false, aiColorStatus: '', aiColorMessage: '', uploadState: { isUploading: false, progress: 0, currentIndex: 0, totalFiles: 0, error: null, success: false, aiStatus: '', aiMessage: '', stagedFiles: [] } }]
+      variants: [...prev.variants, { colorName: '', colorHex: '#C8832A', sizes: [{ size: 'Free Size', stock: 10, extraPricePaise: 0, variantSku: '' }], availability: '', video: '', images: [], colorManuallyEdited: false, aiColorStatus: '', aiColorMessage: '', uploadState: { isUploading: false, progress: 0, currentIndex: 0, totalFiles: 0, error: null, success: false, aiStatus: '', aiMessage: '', stagedFiles: [] } }]
     }));
+  };
+
+  const addVariantSizeRow = (vIdx) => {
+    setFormData(prev => {
+      const list = [...prev.variants];
+      if (!list[vIdx]) return prev;
+      const sizes = list[vIdx].sizes || [];
+      list[vIdx].sizes = [...sizes, { size: 'M', stock: 10, extraPricePaise: 0, variantSku: '' }];
+      return { ...prev, variants: list };
+    });
+  };
+
+  const removeVariantSizeRow = (vIdx, sIdx) => {
+    setFormData(prev => {
+      const list = [...prev.variants];
+      if (!list[vIdx]) return prev;
+      const sizes = list[vIdx].sizes || [];
+      list[vIdx].sizes = sizes.filter((_, i) => i !== sIdx);
+      return { ...prev, variants: list };
+    });
+  };
+
+  const handleVariantSizeChange = (vIdx, sIdx, field, value) => {
+    setFormData(prev => {
+      const list = [...prev.variants];
+      if (!list[vIdx]) return prev;
+      const sizes = [...(list[vIdx].sizes || [])];
+      sizes[sIdx] = { ...sizes[sIdx], [field]: value };
+      list[vIdx].sizes = sizes;
+      return { ...prev, variants: list };
+    });
   };
 
   const removeVariantRow = (idx) => {
@@ -961,7 +993,10 @@ function ProductsView({ token: tokenProp }) {
       const list = [...prev.variants];
       if (list[vIdx] && list[vIdx].images) {
          const updated = list[vIdx].images.map((img, i) => ({ ...img, isPrimary: i === imgIdx }));
-         list[vIdx].images = sortImages(updated);
+         list[vIdx] = {
+           ...list[vIdx],
+           images: sortImages(updated)
+         };
       }
       return { ...prev, variants: list };
     });
@@ -973,7 +1008,10 @@ function ProductsView({ token: tokenProp }) {
       if (list[vIdx] && list[vIdx].images) {
         let newImages = list[vIdx].images.filter((_, i) => i !== imgIdx).map((img, i) => ({ ...img, displayOrder: i }));
         if (newImages.length > 0 && !newImages.some(i => i.isPrimary)) newImages[0].isPrimary = true;
-        list[vIdx].images = newImages;
+        list[vIdx] = {
+          ...list[vIdx],
+          images: newImages
+        };
       }
       return { ...prev, variants: list };
     });
@@ -999,16 +1037,7 @@ function ProductsView({ token: tokenProp }) {
       return;
     }
     
-    // Validation: Variant must have a color
-    if (formData.variants && formData.variants.length > 0) {
-      for (let i = 0; i < formData.variants.length; i++) {
-        const v = formData.variants[i];
-        if (!v.colorName) {
-          alert(`Variant #${i + 1} is missing a Color Name. All variants must have a color.`);
-          return;
-        }
-      }
-    }
+    // Variants validation removed for colorName since Kurtis can have size-only variants without a specific color name.
     
     const body = {
       ...formData,
@@ -1025,7 +1054,10 @@ function ProductsView({ token: tokenProp }) {
         return {
           ...v,
           primaryImage: variantPrimaryImage,
-          extraPricePaise: Math.round(parseFloat(v.extraPricePaise || 0) * 100)
+          sizes: (v.sizes || []).map(s => ({
+            ...s,
+            extraPricePaise: Math.round(parseFloat(s.extraPricePaise || 0) * 100)
+          }))
         };
       })
     };
@@ -1125,7 +1157,10 @@ function ProductsView({ token: tokenProp }) {
         
         return {
           ...v,
-          extraPricePaise: (v.extraPricePaise / 100).toString(),
+          sizes: (v.sizes && v.sizes.length > 0) ? v.sizes.map(s => ({
+            ...s,
+            extraPricePaise: s.extraPricePaise ? (s.extraPricePaise / 100).toString() : '0'
+          })) : [{ size: v.size || 'Free Size', stock: v.stock || 0, extraPricePaise: v.extraPricePaise ? (v.extraPricePaise / 100).toString() : '0', variantSku: v.variantSku || '' }],
           images: sanitizedImages,
           uploadState: v.colorName ? { aiStatus: 'success', aiMessage: `Retrieved color: ${v.colorName}` } : {}
         };
@@ -1142,7 +1177,16 @@ function ProductsView({ token: tokenProp }) {
       dispatchTime: prod.dispatchTime || '',
       productVideo: prod.productVideo || '',
       productHighlights: prod.productHighlights || [],
-      showSizeChart: prod.showSizeChart !== false
+      showSizeChart: prod.showSizeChart !== false,
+      specifications: prod.specifications && Object.keys(prod.specifications).length > 0 ? prod.specifications : {
+        sareeLength: prod.sareeLength || '',
+        sareeWidth: prod.sareeWidth || '',
+        sareeWeight: prod.sareeWeight || '',
+        blousePiece: prod.blousePiece || '',
+        blouseType: prod.blouseType || '',
+        latkan: prod.latkan || '',
+        fabric: prod.fabric || ''
+      }
     });
     setSupplierText('');
     setManuallyEditedFields(new Set());
@@ -1401,51 +1445,57 @@ function ProductsView({ token: tokenProp }) {
                 </div>
               </div>
             </div>
-
-            {/* Saree Specifications Section */}
+            {/* Dynamic Specifications Section */}
             <div className="bg-brand-white border border-brand-border p-6 rounded-2xl shadow-sm space-y-4">
               <span className="block text-sm font-display font-bold text-brand-dark border-b pb-2 mb-4">Specifications</span>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
-                <div className="flex flex-col">
-                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Saree Length {renderConfidenceBadge('sareeLength')}</label>
-                  <input type="text" value={formData.sareeLength} onChange={(e) => handleFieldChange('sareeLength', e.target.value)} placeholder="e.g. 6.30 Meters" className={getFieldClass('sareeLength', "bg-brand-cream px-3 py-2 rounded-md")} />
-                </div>
-                <div className="flex flex-col">
-                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Saree Width {renderConfidenceBadge('sareeWidth')}</label>
-                  <input type="text" value={formData.sareeWidth} onChange={(e) => handleFieldChange('sareeWidth', e.target.value)} placeholder="e.g. 48 Inches" className={getFieldClass('sareeWidth', "bg-brand-cream px-3 py-2 rounded-md")} />
-                </div>
-                <div className="flex flex-col">
-                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Saree Weight {renderConfidenceBadge('sareeWeight')}</label>
-                  <input type="text" value={formData.sareeWeight} onChange={(e) => handleFieldChange('sareeWeight', e.target.value)} placeholder="e.g. 480 Grams" className={getFieldClass('sareeWeight', "bg-brand-cream px-3 py-2 rounded-md")} />
-                </div>
-                <div className="flex flex-col">
-                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Blouse Piece {renderConfidenceBadge('blousePiece')}</label>
-                  <select value={formData.blousePiece} onChange={(e) => handleFieldChange('blousePiece', e.target.value)} className={getFieldClass('blousePiece', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none cursor-pointer")}>
-                    <option value="">Select Option</option>
-                    <option value="Included">Included</option>
-                    <option value="Not Included">Not Included</option>
-                  </select>
-                </div>
-                <div className="flex flex-col">
-                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Blouse Type {renderConfidenceBadge('blouseType')}</label>
-                  <select value={formData.blouseType} onChange={(e) => handleFieldChange('blouseType', e.target.value)} className={getFieldClass('blouseType', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none cursor-pointer")}>
-                    <option value="">Select Type</option>
-                    <option value="Running Blouse">Running Blouse</option>
-                    <option value="Separate Blouse Piece">Separate Blouse Piece</option>
-                    <option value="Designer Blouse">Designer Blouse</option>
-                    <option value="Plain Blouse">Plain Blouse</option>
-                    <option value="Not Applicable">Not Applicable</option>
-                  </select>
-                </div>
-                <div className="flex flex-col">
-                  <label className="font-semibold text-brand-dark mb-1 flex items-center">Latkan {renderConfidenceBadge('latkan')}</label>
-                  <select value={formData.latkan} onChange={(e) => handleFieldChange('latkan', e.target.value)} className={getFieldClass('latkan', "bg-brand-cream px-3 py-2 rounded-md focus:outline-none cursor-pointer")}>
-                    <option value="">Select Option</option>
-                    <option value="Included">Included</option>
-                    <option value="Not Included">Not Included</option>
-                  </select>
-                </div>
-              </div>
+              
+              {(() => {
+                const selectedCat = categories.find(c => c._id === formData.category);
+                const catName = selectedCat ? selectedCat.name.toLowerCase() : '';
+                
+                // Determine which spec configuration to use
+                let configKey = null;
+                if (catName.includes('saree')) configKey = 'saree';
+                else if (catName.includes('kurti')) configKey = 'kurti';
+                else if (catName.includes('dress') || catName.includes('material')) configKey = 'dress material';
+                else if (catName.includes('accessori') || catName.includes('jewel')) configKey = 'accessori';
+
+                const fields = configKey ? CATEGORY_SPEC_CONFIG[configKey] : [];
+
+                if (fields.length === 0) {
+                  return <p className="text-sm text-brand-muted italic">Select a category (e.g. Sarees, Kurtis) to view dynamic specification fields.</p>;
+                }
+
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 animate-fade-in">
+                    {fields.map((field) => (
+                      <div key={field.key} className="flex flex-col">
+                        <label className="font-semibold text-brand-dark mb-1 flex items-center">
+                          {field.label} {renderConfidenceBadge(`specifications.${field.key}`)}
+                        </label>
+                        {field.type === 'select' ? (
+                          <select 
+                            value={(formData.specifications && formData.specifications[field.key]) || ''} 
+                            onChange={(e) => handleSpecChange(field.key, e.target.value)} 
+                            className={getFieldClass(`specifications.${field.key}`, "bg-brand-cream px-3 py-2 rounded-md focus:outline-none cursor-pointer")}
+                          >
+                            <option value="">Select Option</option>
+                            {field.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                          </select>
+                        ) : (
+                          <input 
+                            type="text" 
+                            value={(formData.specifications && formData.specifications[field.key]) || ''} 
+                            onChange={(e) => handleSpecChange(field.key, e.target.value)} 
+                            placeholder={field.placeholder} 
+                            className={getFieldClass(`specifications.${field.key}`, "bg-brand-cream px-3 py-2 rounded-md")} 
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Main Product Media */}
@@ -1479,7 +1529,7 @@ function ProductsView({ token: tokenProp }) {
                       <p className="text-[10px] font-semibold text-brand-dark uppercase tracking-wider mb-3">Main Gallery ({uploadedImages.length})</p>
                       <div className="flex flex-wrap gap-3">
                         {uploadedImages.map((img, i) => (
-                          <div key={i} className={`relative group rounded-lg overflow-hidden border-2 transition-all ${
+                          <div key={img.url || i} className={`relative group rounded-lg overflow-hidden border-2 transition-all ${
                             img.isPrimary ? 'border-brand-crimson shadow-md' : 'border-brand-border hover:border-brand-gold'
                           }`} style={{ width: 80, height: 106 }}>
                             <img src={img.url} alt="" className="w-full h-full object-cover object-top" />
@@ -1667,28 +1717,47 @@ function ProductsView({ token: tokenProp }) {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-4">
-                          <div>
-                            <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 block">Size</label>
-                            <select value={v.size} onChange={(e) => handleVariantChange(i, 'size', e.target.value)} className="border px-3 py-2 rounded-md focus:outline-none cursor-pointer w-full text-xs bg-brand-cream/30">
-                              {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 block">Stock</label>
-                            <input type="number" value={v.stock} onChange={(e) => handleVariantChange(i, 'stock', e.target.value)} className="border px-3 py-2 rounded-md w-full text-xs bg-brand-cream/30" required />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 block">Extra Price (₹)</label>
-                            <input type="number" step="0.01" value={v.extraPricePaise} onChange={(e) => handleVariantChange(i, 'extraPricePaise', e.target.value)} className="border px-3 py-2 rounded-md w-full text-xs bg-brand-cream/30" placeholder="0" />
-                          </div>
+                        <div className="border border-brand-border/60 rounded-xl overflow-hidden mb-4">
+                          <table className="min-w-full divide-y divide-brand-border/60">
+                            <thead className="bg-brand-cream/50 text-[10px] font-bold text-brand-muted uppercase tracking-wider">
+                              <tr>
+                                <th className="px-3 py-2 text-left">Size</th>
+                                <th className="px-3 py-2 text-left">Stock</th>
+                                <th className="px-3 py-2 text-left">Extra Price (₹)</th>
+                                <th className="px-3 py-2 text-left">SKU</th>
+                                <th className="px-3 py-2"></th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-brand-border/60 text-xs">
+                              {(v.sizes || []).map((s, sIdx) => (
+                                <tr key={sIdx} className="bg-brand-white">
+                                  <td className="px-3 py-2">
+                                    <select value={s.size || ''} onChange={(e) => handleVariantSizeChange(i, sIdx, 'size', e.target.value)} className="w-full bg-transparent border-none focus:outline-none cursor-pointer font-semibold text-brand-dark">
+                                      {SIZES.map(sz => <option key={sz} value={sz}>{sz}</option>)}
+                                    </select>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input type="number" value={s.stock ?? 0} onChange={(e) => handleVariantSizeChange(i, sIdx, 'stock', parseInt(e.target.value) || 0)} className="w-16 bg-brand-cream/30 border border-brand-border rounded px-2 py-1 focus:outline-none" required />
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input type="number" step="0.01" value={s.extraPricePaise ? s.extraPricePaise / 100 : ''} onChange={(e) => handleVariantSizeChange(i, sIdx, 'extraPricePaise', Math.round(parseFloat(e.target.value) * 100) || 0)} className="w-20 bg-brand-cream/30 border border-brand-border rounded px-2 py-1 focus:outline-none" placeholder="0" />
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input type="text" value={s.variantSku || ''} onChange={(e) => handleVariantSizeChange(i, sIdx, 'variantSku', e.target.value)} className="w-full bg-brand-cream/30 border border-brand-border rounded px-2 py-1 focus:outline-none" placeholder="SKU" />
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    <button type="button" onClick={() => removeVariantSizeRow(i, sIdx)} className="text-brand-crimson/70 hover:text-brand-crimson p-1"><X size={14} /></button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          <button type="button" onClick={() => addVariantSizeRow(i)} className="w-full text-center py-2 text-[10px] font-bold text-brand-dark uppercase bg-brand-cream/30 hover:bg-brand-gold/10 transition-colors border-t border-brand-border/60">
+                            + Add Size
+                          </button>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 block">Variant SKU (Optional)</label>
-                            <input type="text" value={v.variantSku || ''} onChange={(e) => handleVariantChange(i, 'variantSku', e.target.value)} placeholder="SKU-RED" className="border px-3 py-2 rounded-md w-full focus:outline-none text-xs bg-brand-cream/30" />
-                          </div>
                           <div>
                             <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mb-1.5 block">Availability</label>
                             <select value={v.availability || ''} onChange={(e) => handleVariantChange(i, 'availability', e.target.value)} className="border px-3 py-2 rounded-md focus:outline-none cursor-pointer w-full text-xs bg-brand-cream/30">
@@ -1710,7 +1779,7 @@ function ProductsView({ token: tokenProp }) {
                         <div className="flex flex-wrap gap-3">
                           {/* Uploaded images blocks */}
                           {v.images && v.images.map((img, imgIdx) => (
-                            <div key={imgIdx} className={`relative group rounded-lg overflow-hidden border-2 transition-all ${
+                            <div key={img.url || imgIdx} className={`relative group rounded-lg overflow-hidden border-2 transition-all ${
                               img.isPrimary ? 'border-brand-crimson shadow-md' : 'border-brand-border hover:border-brand-gold'
                             }`} style={{ width: 84, height: 112 }}>
                               <img src={img.url} alt="" className="w-full h-full object-cover object-top" />

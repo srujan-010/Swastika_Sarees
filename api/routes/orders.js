@@ -98,12 +98,18 @@ router.post('/', async (req, res) => {
 
       // Check variant stock if color/size specified
       if (item.color || item.size) {
-        const variant = dbProduct.variants.find(v => 
-          (!item.color || v.colorName === item.color) && 
-          (!item.size || v.size === item.size)
-        );
-        if (variant && variant.stock < item.quantity) {
-          outOfStockItems.push(`${dbProduct.name} - ${item.color || ''} ${item.size || ''} (Only ${variant.stock} left)`);
+        const variant = dbProduct.variants.find(v => !item.color || v.colorName === item.color);
+        if (variant) {
+          const sizeObj = variant.sizes?.find(s => !item.size || s.size === item.size);
+          if (sizeObj) {
+            if (sizeObj.stock < item.quantity) {
+              outOfStockItems.push(`${dbProduct.name} - ${item.color || ''} ${item.size || ''} (Only ${sizeObj.stock} left)`);
+            }
+          } else {
+             outOfStockItems.push(`${dbProduct.name} - ${item.color || ''} ${item.size || ''} (Size not found)`);
+          }
+        } else {
+          outOfStockItems.push(`${dbProduct.name} - ${item.color || ''} (Color not found)`);
         }
       }
 
@@ -144,12 +150,12 @@ router.post('/', async (req, res) => {
 
       // Deduct variant stock
       if (item.color || item.size) {
-        const variant = item.product.variants.find(v => 
-          (!item.color || v.colorName === item.color) && 
-          (!item.size || v.size === item.size)
-        );
+        const variant = item.product.variants.find(v => !item.color || v.colorName === item.color);
         if (variant) {
-          variant.stock -= item.quantity;
+          const sizeObj = variant.sizes?.find(s => !item.size || s.size === item.size);
+          if (sizeObj) {
+            sizeObj.stock -= item.quantity;
+          }
         }
       }
       await item.product.save();

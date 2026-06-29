@@ -101,7 +101,7 @@ router.get('/', async (req, res) => {
 
     if (size) {
       const sizeArray = size.split(',');
-      query['variants.size'] = { $in: sizeArray };
+      query['variants.sizes.size'] = { $in: sizeArray };
     }
 
     if (rating) {
@@ -401,9 +401,8 @@ router.post('/', requireAdmin, async (req, res) => {
       name, slug, category, subCategory, brand, description, fabric, careInstructions,
       occasionTags, styleTags, price, originalPrice, stock, weightGrams,
       sku, isActive, isFeatured, isBestseller, isNewArrival, images,
-      variants, seo, productVideo, productHighlights, sareeLength, sareeWidth,
-      sareeWeight, blousePiece, blouseType, latkan, availability, dispatchTime,
-      colorName, colorHex, mainProduct
+      variants, seo, productVideo, productHighlights, availability, dispatchTime,
+      colorName, colorHex, mainProduct, specifications
     } = req.body;
 
     if (!name || !slug || !category || !price) {
@@ -417,9 +416,6 @@ router.post('/', requireAdmin, async (req, res) => {
 
     if (variants && variants.length > 0) {
       for (const v of variants) {
-        if (!v.colorName) {
-          return res.status(400).json({ error: 'All variants must have a Color Name specified.' });
-        }
         if (v.availability === "") {
           delete v.availability;
         }
@@ -447,8 +443,8 @@ router.post('/', requireAdmin, async (req, res) => {
       },
       variants: variants || [],
       seo: seo || { metaTitle: name, metaDescription: description?.replace(/<[^>]*>/g, '').substring(0, 160) },
-      brand, productVideo, productHighlights, sareeLength, sareeWidth, sareeWeight, blousePiece, blouseType, latkan, dispatchTime,
-      colorName, colorHex
+      brand, productVideo, productHighlights, dispatchTime,
+      colorName, colorHex, specifications: specifications || {}
     };
 
     if (availability !== "") {
@@ -485,9 +481,8 @@ router.put('/:id', requireAdmin, async (req, res) => {
       name, slug, category, subCategory, brand, description, fabric, careInstructions,
       occasionTags, styleTags, price, originalPrice, stock, weightGrams,
       sku, isActive, isFeatured, isBestseller, isNewArrival, images,
-      variants, seo, productVideo, productHighlights, sareeLength, sareeWidth,
-      sareeWeight, blousePiece, blouseType, latkan, availability, dispatchTime,
-      colorName, colorHex, mainProduct
+      variants, seo, productVideo, productHighlights, availability, dispatchTime,
+      colorName, colorHex, mainProduct, specifications
     } = req.body;
 
     const existing = await Product.findOne({ slug, _id: { $ne: prodId } });
@@ -497,9 +492,6 @@ router.put('/:id', requireAdmin, async (req, res) => {
 
     if (variants && variants.length > 0) {
       for (const v of variants) {
-        if (!v.colorName) {
-          return res.status(400).json({ error: 'All variants must have a Color Name specified.' });
-        }
         // Remove empty enum values to prevent Mongoose validation errors
         if (v.availability === "") {
           delete v.availability;
@@ -529,8 +521,8 @@ router.put('/:id', requireAdmin, async (req, res) => {
       },
       variants: variants || [],
       seo: seo || { metaTitle: name, metaDescription: description?.replace(/<[^>]*>/g, '').substring(0, 160) },
-      brand, productVideo, productHighlights, sareeLength, sareeWidth, sareeWeight, blousePiece, blouseType, latkan, dispatchTime,
-      colorName, colorHex
+      brand, productVideo, productHighlights, dispatchTime,
+      colorName, colorHex, specifications: specifications || {}
     };
 
     if (availability !== "") {

@@ -22,14 +22,20 @@ export default function ProductCard({ product, onQuickView }) {
   // Extract unique colors from variants
   const colors = [];
   const colorMap = new Map();
+  let totalVariantStock = 0;
   product.variants?.forEach(v => {
     if (v.colorName && !colorMap.has(v.colorName)) {
       colorMap.set(v.colorName, true);
       colors.push({ name: v.colorName, hex: v.colorHex });
     }
+    v.sizes?.forEach(s => {
+      totalVariantStock += (s.stock || 0);
+    });
   });
 
-  const isOutOfStock = product.stock === 0;
+  const isOutOfStock = product.category?.slug !== 'sarees' && product.variants?.length > 0
+    ? totalVariantStock === 0
+    : product.stock === 0;
 
   const handleAddToCart = (e) => {
     e.preventDefault();
@@ -37,17 +43,18 @@ export default function ProductCard({ product, onQuickView }) {
     
     // Use first variant as default choice if available
     const defaultVariant = product.variants?.[0];
+    const defaultSizeObj = defaultVariant?.sizes?.find(s => s.stock > 0) || defaultVariant?.sizes?.[0];
     
     addItem({
       product: product._id,
       slug: product.slug,
       name: product.name,
-      price: currentPrice,
+      price: currentPrice + (defaultSizeObj?.extraPricePaise ? defaultSizeObj.extraPricePaise / 100 : 0),
       quantity: 1,
       color: defaultVariant?.colorName || null,
-      size: defaultVariant?.size || null,
+      size: product.category?.slug !== 'sarees' ? (defaultSizeObj?.size || null) : null,
       imageUrl: primaryImage,
-      stock: product.stock
+      stock: defaultSizeObj?.stock !== undefined ? defaultSizeObj.stock : product.stock
     });
   };
 
@@ -195,7 +202,7 @@ export default function ProductCard({ product, onQuickView }) {
                 <span
                   key={i}
                   title={color.name}
-                  className="w-4 h-4 rounded-full border border-brand-border shadow-2xs hover:scale-110 transition-transform cursor-pointer"
+                  className="w-4 h-4 rounded border border-brand-border shadow-2xs hover:scale-110 transition-transform cursor-pointer"
                   style={{ backgroundColor: color.hex || '#ccc' }}
                 />
               ))}

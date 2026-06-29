@@ -47,11 +47,19 @@ const ImageSchema = new Schema({
   isPrimary: { type: Boolean, default: false }
 });
 
-// 5. Variant Schema (Nested inside Product)
+// 5a. Size Variant Schema (Nested inside Variant)
+const SizeVariantSchema = new Schema({
+  size: { type: String, required: true },
+  stock: { type: Number, default: 0 },
+  extraPricePaise: { type: Number, default: 0 },
+  variantSku: { type: String }
+});
+
+// 5b. Variant Schema (Nested inside Product)
 const VariantSchema = new Schema({
   colorName: { type: String },
   colorHex: { type: String },
-  size: { type: String },
+  sizes: [SizeVariantSchema],
   stock: { type: Number, default: 0 },
   extraPricePaise: { type: Number, default: 0 }, // Extra price to add to product base price
   variantSku: { type: String },
@@ -103,12 +111,7 @@ const ProductSchema = new Schema({
   variants: [VariantSchema],
   productVideo: { type: String },
   productHighlights: [{ type: String }],
-  sareeLength: { type: String },
-  sareeWidth: { type: String },
-  sareeWeight: { type: String },
-  blousePiece: { type: String, enum: ['Included', 'Not Included'] },
-  blouseType: { type: String, enum: ['Running Blouse', 'Separate Blouse Piece', 'Designer Blouse', 'Plain Blouse', 'Not Applicable'] },
-  latkan: { type: String, enum: ['Included', 'Not Included'] },
+  specifications: { type: Schema.Types.Mixed, default: {} },
   availability: { type: String, enum: ['Single Ready', 'Bulk Ready', 'Single & Bulk Ready', 'Made To Order', 'Pre Order'] },
   dispatchTime: { type: String, enum: ['Ships in 24 Hours', 'Ships in 2 Days', 'Ships in 3 Days', 'Ships in 5 Days', 'Made To Order'] },
   seo: {
