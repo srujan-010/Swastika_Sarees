@@ -27,14 +27,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 ───────────────────────────────────────────────────────────────────────── */
 const SHOP_MEGA_CONFIG = {
   occasions: [
-    { label: 'Wedding Collection',     link: '/shop?occasion=wedding' },
-    { label: 'Party Wear',             link: '/shop?occasion=party' },
-    { label: 'Festive Collection',     link: '/shop?occasion=festive' },
-    { label: 'Office Wear',            link: '/shop?occasion=office' },
-    { label: 'Casual Wear',            link: '/shop?occasion=casual' },
+    { label: 'Wedding Collection', link: '/shop?occasion=wedding' },
+    { label: 'Party Wear', link: '/shop?occasion=party' },
+    { label: 'Festive Collection', link: '/shop?occasion=festive' },
     { label: 'Traditional Collection', link: '/shop?occasion=traditional' },
-    { label: 'New Arrivals',           link: '/shop?new=true' },
-    { label: 'Best Sellers',           link: '/shop?sort=popular' },
+    { label: 'New Arrivals', link: '/shop?new=true' },
+    { label: 'Best Sellers', link: '/shop?sort=popular' },
   ],
   featuredCards: [
     {
@@ -68,17 +66,17 @@ export default function Navbar() {
   const { wishlist } = useWishlistStore();
 
   /* ── UI State ── */
-  const [mobileMenuOpen, setMobileMenuOpen]         = useState(false);
-  const [searchOpen, setSearchOpen]                 = useState(false);
-  const [searchQuery, setSearchQuery]               = useState('');
-  const [cartCount, setCartCount]                   = useState(0);
-  const [cartBounce, setCartBounce]                 = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [cartCount, setCartCount] = useState(0);
+  const [cartBounce, setCartBounce] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  const [isScrolled, setIsScrolled]                 = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   /* ── Data State ── */
   const [categories, setCategories] = useState([]);
-  const [settings, setSettings]     = useState(null);
+  const [settings, setSettings] = useState(null);
 
   /* ── Mobile Accordion ── */
   const [mobileExpandedCatId, setMobileExpandedCatId] = useState(null);
@@ -231,18 +229,16 @@ export default function Navbar() {
   return (
     <header
       onMouseLeave={handleHeaderLeave}
-      className={`sticky top-0 z-50 transition-all duration-500 ease-in-out ${
-        isScrolled
-          ? 'bg-brand-white/80 backdrop-blur-xl border-b border-brand-border/20 shadow-[0_10px_30px_rgba(0,0,0,0.08)] py-1'
-          : 'bg-brand-white border-b border-brand-border/40 py-3'
-      }`}
+      className={`sticky top-0 z-50 transition-all duration-500 ease-in-out ${isScrolled
+        ? 'bg-brand-white/80 backdrop-blur-xl border-b border-brand-border/20 shadow-[0_10px_30px_rgba(0,0,0,0.08)] py-1'
+        : 'bg-brand-white border-b border-brand-border/40 py-3'
+        }`}
     >
       {/* ── Inner Constrained Row ── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div
-          className={`flex items-center justify-between transition-all duration-300 ${
-            isScrolled ? 'h-14' : 'h-20'
-          }`}
+          className={`flex items-center justify-between transition-all duration-300 ${isScrolled ? 'h-14' : 'h-20'
+            }`}
         >
           {/* Mobile hamburger */}
           <div className="flex md:hidden">
@@ -258,7 +254,7 @@ export default function Navbar() {
           {/* Brand Logo */}
           <div className="flex-1 flex justify-center md:justify-start">
             <Link to="/" className="flex flex-col items-center md:items-start group select-none">
-              <motion.span 
+              <motion.span
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1, scale: isScrolled ? 0.85 : 1 }}
                 style={{ transformOrigin: 'left center' }}
@@ -267,7 +263,7 @@ export default function Navbar() {
               >
                 Swastika Sarees
               </motion.span>
-              <motion.span 
+              <motion.span
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
@@ -305,9 +301,8 @@ export default function Navbar() {
                 <span>Shop</span>
                 <ChevronDown
                   size={12}
-                  className={`transition-transform duration-300 ${
-                    megaMenuOpen ? 'rotate-180 text-brand-crimson' : ''
-                  }`}
+                  className={`transition-transform duration-300 ${megaMenuOpen ? 'rotate-180 text-brand-crimson' : ''
+                    }`}
                 />
               </Link>
             </div>
@@ -392,9 +387,8 @@ export default function Navbar() {
             {/* Cart */}
             <Link
               to="/cart"
-              className={`relative p-2 text-brand-dark hover:text-brand-crimson transition-colors rounded-full hover:bg-brand-cream ${
-                cartBounce ? 'animate-bounce' : ''
-              }`}
+              className={`relative p-2 text-brand-dark hover:text-brand-crimson transition-colors rounded-full hover:bg-brand-cream ${cartBounce ? 'animate-bounce' : ''
+                }`}
               aria-label="Cart"
             >
               <ShoppingBag size={22} />
@@ -491,7 +485,7 @@ export default function Navbar() {
       {/* ══ Inline Search Drawer ══ */}
       <AnimatePresence>
         {searchOpen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
@@ -547,7 +541,7 @@ export default function Navbar() {
             />
 
             {/* Drawer panel */}
-            <motion.div 
+            <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
@@ -640,7 +634,7 @@ export default function Navbar() {
                       {/* Subcategory horizontal scroll strip */}
                       <AnimatePresence>
                         {hasSubs && isExpanded && (
-                          <motion.div 
+                          <motion.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
