@@ -464,6 +464,8 @@ function ProductsView({ token: tokenProp }) {
     productVideo: '',
     productHighlights: [],
     showSizeChart: true,
+    rating: '4.9',
+    reviewsCount: '33',
     specifications: {}
   });
   const [mainUploadState, setMainUploadState] = useState({
@@ -1054,7 +1056,7 @@ function ProductsView({ token: tokenProp }) {
     
     const body = {
       ...formData,
-      stock: formData.mainProductSizes.reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0),
+      stock: (formData.mainProductSizes || []).reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0),
       images: imagesPayload, // Legacy fallback
       mainProduct: {
         primaryColor: { name: formData.colorName, hex: formData.colorHex },
@@ -1147,6 +1149,8 @@ function ProductsView({ token: tokenProp }) {
       isFeatured: prod.isFeatured || false,
       isBestseller: prod.isBestseller || false,
       isNewArrival: prod.isNewArrival || false,
+      rating: prod.rating !== undefined && prod.rating !== null ? prod.rating.toString() : '4.9',
+      reviewsCount: prod.reviewsCount !== undefined && prod.reviewsCount !== null ? prod.reviewsCount.toString() : '33',
       
       // Attempt to load from mainProduct first, then fallback to legacy flat fields
       imageUrl: prod.mainProduct?.images?.[0]?.url || prod.images?.[0]?.url || '',
@@ -1284,7 +1288,8 @@ function ProductsView({ token: tokenProp }) {
                 name: '', slug: '', category: categories[0]?._id || '', subCategory: '', description: '', fabric: '', careInstructions: '',
                 occasionTags: [], styleTags: [], price: '', originalPrice: '', stock: '10', sku: '', isActive: true,
                 isFeatured: false, isBestseller: false, isNewArrival: false, imageUrl: '', variants: [],
-                brand: '', sareeLength: '', sareeWidth: '', sareeWeight: '', blousePiece: '', blouseType: '', latkan: '', availability: '', dispatchTime: '', productVideo: '', productHighlights: [], showSizeChart: true
+                brand: '', sareeLength: '', sareeWidth: '', sareeWeight: '', blousePiece: '', blouseType: '', latkan: '', availability: '', dispatchTime: '', productVideo: '', productHighlights: [], showSizeChart: true,
+                rating: '4.9', reviewsCount: '33', mainProductSizes: []
               });
               setSupplierText('');
               setManuallyEditedFields(new Set());
@@ -1441,7 +1446,7 @@ function ProductsView({ token: tokenProp }) {
                 </div>
                 <div className="flex flex-col">
                   <label className="font-semibold text-brand-dark mb-1 flex items-center">Total Stock * {renderConfidenceBadge('stock')}</label>
-                  <input type="number" value={formData.mainProductSizes.reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0)} disabled className="bg-brand-cream/50 px-3 py-2 rounded-md cursor-not-allowed opacity-70" required />
+                  <input type="number" value={(formData.mainProductSizes || []).reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0)} disabled className="bg-brand-cream/50 px-3 py-2 rounded-md cursor-not-allowed opacity-70" required />
                 </div>
                 <div className="flex flex-col">
                   <label className="font-semibold text-brand-dark mb-1 flex items-center">Product SKU {renderConfidenceBadge('sku')}</label>
@@ -1677,6 +1682,57 @@ function ProductsView({ token: tokenProp }) {
                   <input type="checkbox" checked={formData.showSizeChart} onChange={(e) => setFormData({ ...formData, showSizeChart: e.target.checked })} className="rounded text-brand-crimson h-4 w-4 border-brand-border" />
                   <span>Show Size Options</span>
                 </label>
+              </div>
+
+              {/* Rating & Reviews Section */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-5 mt-4">
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1 flex items-center">
+                    Rating Stars (Tick number out of 5)
+                  </label>
+                  <div className="flex flex-wrap gap-3 items-center py-2 bg-brand-cream/35 px-3 rounded-md border border-brand-border">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <label key={star} className="flex items-center space-x-1 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="rating-stars"
+                          value={star}
+                          checked={Math.round(parseFloat(formData.rating || '5')) === star}
+                          onChange={() => handleFieldChange('rating', star.toFixed(1))}
+                          className="rounded-full text-brand-crimson focus:ring-brand-gold h-4 w-4 border-brand-border"
+                        />
+                        <span className="text-xs font-semibold text-brand-dark">{star} Star{star > 1 ? 's' : ''}</span>
+                      </label>
+                    ))}
+                    <div className="flex items-center ml-auto border-l pl-3 gap-1.5 border-brand-border">
+                      <span className="text-2xs uppercase tracking-wider font-semibold text-brand-muted">Value:</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="1"
+                        max="5"
+                        value={formData.rating}
+                        onChange={(e) => handleFieldChange('rating', e.target.value)}
+                        className="w-16 border px-2 py-1 rounded text-xs text-brand-dark text-center border-brand-border bg-brand-white focus:outline-none focus:ring-1 focus:ring-brand-gold font-bold"
+                        placeholder="Custom"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col">
+                  <label className="font-semibold text-brand-dark mb-1">
+                    Number of Ratings (Reviews count) *
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.reviewsCount}
+                    onChange={(e) => handleFieldChange('reviewsCount', e.target.value)}
+                    className="border px-3 py-2.5 rounded-md focus:outline-none bg-brand-white text-xs border-brand-border shadow-sm w-full font-sans"
+                    placeholder="e.g. 33"
+                    required
+                  />
+                </div>
               </div>
             </div>
 

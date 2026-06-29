@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Heart, Eye, ShoppingCart } from 'lucide-react';
 import { useWishlistStore } from '../store/wishlistStore';
 import { useCartStore } from '../store/cartStore';
@@ -9,12 +9,10 @@ export default function ProductCard({ product, onQuickView }) {
   const { toggleWishlist, isInWishlist } = useWishlistStore();
   const { addItem } = useCartStore();
   const [hovered, setHovered] = useState(false);
+  const [selectedVariantColor, setSelectedVariantColor] = useState(null);
+  const navigate = useNavigate();
 
   const isSaved = isInWishlist(product._id);
-  const sourceImages = product.mainProduct?.images?.length > 0 ? product.mainProduct.images : product.images;
-  const primaryImage = sourceImages?.find(img => img.isPrimary)?.url || sourceImages?.[0]?.url || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=400';
-  const secondaryImage = sourceImages?.find(img => !img.isPrimary && img.displayOrder > 0)?.url || sourceImages?.[1]?.url || primaryImage;
-
   const currentPrice = product.price / 100;
   const originalPrice = product.originalPrice ? product.originalPrice / 100 : null;
   const discountPercent = originalPrice ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0;
@@ -24,8 +22,13 @@ export default function ProductCard({ product, onQuickView }) {
   let totalStock = 0;
   let hasSizes = false;
 
+  const defaultImages = product.mainProduct?.images?.length > 0 ? product.mainProduct.images : product.images;
+
   if (product.mainProduct?.primaryColor?.name || product.colorName) {
-    colorMap.set(product.mainProduct?.primaryColor?.name || product.colorName, { hex: product.mainProduct?.primaryColor?.hex || product.colorHex });
+    colorMap.set(product.mainProduct?.primaryColor?.name || product.colorName, { 
+      hex: product.mainProduct?.primaryColor?.hex || product.colorHex,
+      images: defaultImages
+    });
   }
   if (product.mainProduct?.sizes && product.mainProduct.sizes.length > 0) {
     hasSizes = true;
@@ -34,7 +37,7 @@ export default function ProductCard({ product, onQuickView }) {
 
   product.variants?.forEach(v => {
     if (v.colorName && !colorMap.has(v.colorName)) {
-      colorMap.set(v.colorName, { hex: v.colorHex });
+      colorMap.set(v.colorName, { hex: v.colorHex, images: v.images });
     }
     if (v.sizes && v.sizes.length > 0) {
       hasSizes = true;
@@ -42,7 +45,13 @@ export default function ProductCard({ product, onQuickView }) {
     }
   });
 
-  const colors = Array.from(colorMap.entries()).map(([name, {hex}]) => ({name, hex}));
+  const colors = Array.from(colorMap.entries()).map(([name, {hex, images}]) => ({name, hex, images}));
+
+  const activeColorData = selectedVariantColor ? colorMap.get(selectedVariantColor) : null;
+  const sourceImages = activeColorData?.images?.length > 0 ? activeColorData.images : defaultImages;
+  
+  const primaryImage = sourceImages?.find(img => img.isPrimary)?.url || sourceImages?.[0]?.url || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=400';
+  const secondaryImage = sourceImages?.find(img => !img.isPrimary && img.displayOrder > 0)?.url || sourceImages?.[1]?.url || primaryImage;
 
   if (!hasSizes) {
     totalStock = product.stock || 0;
@@ -76,9 +85,10 @@ export default function ProductCard({ product, onQuickView }) {
   return (
     <motion.div
       whileTap={{ scale: 0.98 }}
-      className="group relative w-full overflow-hidden flex flex-col h-full bg-white shadow-sm hover:shadow-lg transition-shadow duration-300 rounded-xl border border-brand-border/20"
+      className="group relative w-full overflow-hidden flex flex-col h-full bg-white shadow-sm hover:shadow-lg transition-shadow duration-300 rounded-xl border border-brand-border/20 cursor-pointer"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={() => navigate(`/product/${product.slug}`)}
     >
       {/* TOP HALF: Image Section */}
       <div className="relative aspect-[2/3] w-full overflow-hidden bg-brand-cream select-none">
@@ -123,7 +133,7 @@ export default function ProductCard({ product, onQuickView }) {
         </div>
 
         {/* Hover Swap Gallery Container */}
-        <Link to={`/product/${product.slug}`} className="absolute inset-0 block h-full w-full z-0">
+        <div className="absolute inset-0 block h-full w-full z-0">
           <img
             src={primaryImage}
             alt={product.name}
@@ -139,8 +149,7 @@ export default function ProductCard({ product, onQuickView }) {
               loading="lazy"
             />
           )}
-
-        </Link>
+        </div>
 
         {/* Out Of Stock Overlay */}
         {isOutOfStock && (
@@ -208,11 +217,11 @@ export default function ProductCard({ product, onQuickView }) {
             {product.category?.name || 'KURTIS'}
           </span>
 
-          <Link to={`/product/${product.slug}`} className="block">
+          <div className="block">
             <h4 className="font-display font-medium text-brand-dark text-base sm:text-lg leading-snug line-clamp-2 hover:text-[#5C2E2E] transition-colors duration-300">
               {product.name}
             </h4>
-          </Link>
+          </div>
 
           {/* Color Swatches */}
           {colors.length > 0 && (
@@ -221,7 +230,16 @@ export default function ProductCard({ product, onQuickView }) {
                 <span
                   key={i}
                   title={color.name}
-                  className="w-4 h-4 rounded-sm border border-black/10 shadow-sm hover:scale-110 transition-transform cursor-pointer"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setSelectedVariantColor(color.name);
+                  }}
+                  className={`w-4 h-4 shadow-sm transition-all cursor-pointer ${
+                    selectedVariantColor === color.name 
+                      ? 'rounded-full ring-1 ring-[#5C2E2E] ring-offset-[3px] ring-offset-white scale-110' 
+                      : 'rounded-sm border border-black/10 hover:scale-110'
+                  }`}
                   style={{ backgroundColor: color.hex || '#ccc' }}
                 />
               ))}
