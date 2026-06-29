@@ -53,22 +53,12 @@ export default function ProductCard({ product, onQuickView }) {
   const handleAddToCart = (e) => {
     e.preventDefault();
     e.stopPropagation();
-<<<<<<< HEAD
-
-    // Use first variant as default choice if available
-    const defaultVariant = product.variants?.[0];
-    const defaultSizeObj = defaultVariant?.sizes?.find(s => s.stock > 0) || defaultVariant?.sizes?.[0];
-
-=======
-    
     const defaultColor = product.mainProduct?.primaryColor?.name || product.colorName || product.variants?.[0]?.colorName;
     const defaultSizes = (product.mainProduct?.sizes && product.mainProduct.sizes.length > 0) 
       ? product.mainProduct.sizes 
       : product.variants?.[0]?.sizes;
       
     const defaultSizeObj = defaultSizes?.find(s => s.stock > 0) || defaultSizes?.[0];
-    
->>>>>>> 9b6f12ee3b1a1f356e7a3fe0dbc512572f734e66
     addItem({
       product: product._id,
       slug: product.slug,
