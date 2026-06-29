@@ -519,42 +519,44 @@ export default function Home() {
         initial="initial"
         whileInView="whileInView"
         viewport={{ once: true, margin: "-50px" }}
-        variants={fadeScale}
+        variants={staggerContainer}
         className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-24 text-center select-none"
       >
-        <h2 className="font-display text-3xl sm:text-4xl text-brand-dark tracking-wide font-bold uppercase">
+        <motion.h2 variants={fadeInUp} className="font-display text-3xl sm:text-4xl text-brand-dark tracking-wide font-bold uppercase">
           {settings?.homeCategoryHeading || 'Shop by Category'}
-        </h2>
-        <div className="luxury-divider" />
-        <p className="text-sm text-brand-muted/80 max-w-lg mx-auto mb-12 leading-relaxed">
+        </motion.h2>
+        <motion.div variants={fadeInUp} className="luxury-divider mx-auto" />
+        <motion.p variants={fadeInUp} className="text-sm text-brand-muted/80 max-w-lg mx-auto mb-12 leading-relaxed">
           {settings?.homeCategoryDescription || 'Handcrafted fabrics tailored for festive sparkle, weddings, daily charm, and special moments.'}
-        </p>
+        </motion.p>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
+        <motion.div variants={staggerContainer} className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
           {activeCategories.map((cat, i) => (
             <motion.div variants={scaleUp} key={i}>
               <Link
                 to={`/shop?category=${cat.slug}`}
-                className="group relative aspect-[3/4] rounded-xl overflow-hidden shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all duration-500 border border-brand-border/20 block h-full"
+                className="group relative aspect-[3/4] rounded-sm overflow-hidden block h-full bg-brand-dark"
               >
                 <img
                   src={cat.imageUrl}
                   alt={cat.name}
-                  className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-105"
+                  className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105 opacity-90 group-hover:opacity-100"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/80 via-brand-dark/20 to-transparent transition-opacity duration-500 group-hover:opacity-90" />
-                <div className="absolute bottom-6 left-0 right-0 text-center flex flex-col items-center justify-center px-4">
-                  <span className="font-display text-brand-cream text-lg sm:text-xl font-bold tracking-wider">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
+                <div className="absolute inset-0 p-6 flex flex-col items-center justify-end">
+                  <span className="font-display text-white text-xl sm:text-2xl font-medium tracking-wide transform transition-transform duration-500 group-hover:-translate-y-1">
                     {cat.name}
                   </span>
-                  <span className="text-[10px] uppercase tracking-widest font-sans text-brand-gold-light mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                    Shop Collection &rarr;
-                  </span>
+                  <div className="overflow-hidden h-0 opacity-0 group-hover:h-5 group-hover:opacity-100 transition-all duration-500 ease-in-out transform -translate-y-2 group-hover:translate-y-0 mt-1">
+                     <span className="text-[10px] uppercase tracking-widest font-sans text-white/90 border-b border-white/50 pb-0.5">
+                       Discover
+                     </span>
+                  </div>
                 </div>
               </Link>
             </motion.div>
           ))}
-        </div>
+        </motion.div>
       </motion.section>
 
       {/* 3. FEATURED PRODUCTS COLLECTION (Increased vertical padding) */}
@@ -562,7 +564,7 @@ export default function Home() {
         initial="initial"
         whileInView="whileInView"
         viewport={{ once: true, margin: "-50px" }}
-        variants={slideUpFade}
+        variants={staggerContainer}
         className="bg-brand-white border-t border-b border-brand-border/40 py-20 lg:py-24"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -590,7 +592,7 @@ export default function Home() {
               ))}
             </div>
           ) : collections.featured.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
+            <motion.div variants={staggerContainer} className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
               {collections.featured.slice(0, 4).map(prod => (
                 <motion.div variants={fadeInUp} key={prod._id}>
                   <ProductCard
@@ -599,7 +601,7 @@ export default function Home() {
                   />
                 </motion.div>
               ))}
-            </div>
+            </motion.div>
           ) : (
             <p className="text-brand-muted text-sm text-center py-6">Add featured products from the admin panel to showcase here!</p>
           )}
@@ -658,7 +660,7 @@ export default function Home() {
         initial="initial"
         whileInView="whileInView"
         viewport={{ once: true, margin: "-50px" }}
-        variants={slideInRight}
+        variants={staggerContainer}
         className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-24"
       >
         <div className="flex justify-between items-end mb-10 border-b border-brand-border/30 pb-4">
@@ -679,13 +681,13 @@ export default function Home() {
             {[1, 2, 3, 4].map(n => <div key={n} className="aspect-[3/4] skeleton-shimmer rounded-xl" />)}
           </div>
         ) : collections.newArrivals.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
+          <motion.div variants={staggerContainer} className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
             {collections.newArrivals.slice(0, 4).map(prod => (
               <motion.div variants={fadeInUp} key={prod._id}>
                 <ProductCard product={prod} onQuickView={(p) => setQuickViewProduct(p)} />
               </motion.div>
             ))}
-          </div>
+          </motion.div>
         ) : (
           <p className="text-brand-muted text-sm text-center py-6">Check back soon for new arrivals!</p>
         )}
@@ -696,7 +698,7 @@ export default function Home() {
         initial="initial"
         whileInView="whileInView"
         viewport={{ once: true, margin: "-50px" }}
-        variants={fadeScale}
+        variants={staggerContainer}
         className="bg-brand-cream/45 border-t border-b border-brand-border/40 py-20 lg:py-24"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -718,13 +720,13 @@ export default function Home() {
               {[1, 2, 3, 4].map(n => <div key={n} className="aspect-[3/4] skeleton-shimmer rounded-xl" />)}
             </div>
           ) : collections.bestsellers.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
+            <motion.div variants={staggerContainer} className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
               {collections.bestsellers.slice(0, 4).map(prod => (
                 <motion.div variants={fadeInUp} key={prod._id}>
                   <ProductCard product={prod} onQuickView={(p) => setQuickViewProduct(p)} />
                 </motion.div>
               ))}
-            </div>
+            </motion.div>
           ) : (
             <p className="text-brand-muted text-sm text-center py-6">Add bestselling products to display here!</p>
           )}
@@ -736,15 +738,15 @@ export default function Home() {
         initial="initial"
         whileInView="whileInView"
         viewport={{ once: true, margin: "-50px" }}
-        variants={blurReveal}
+        variants={staggerContainer}
         className="bg-brand-cream border-b border-brand-border/30 py-20 lg:py-24 text-center select-none relative"
       >
         <div className="absolute inset-0 ambient-glow-bg" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <h2 className="font-display text-3xl text-brand-dark font-bold uppercase tracking-wide mb-2">Boutique Guarantee</h2>
-          <div className="luxury-divider" />
+          <motion.h2 variants={fadeInUp} className="font-display text-3xl text-brand-dark font-bold uppercase tracking-wide mb-2">Boutique Guarantee</motion.h2>
+          <motion.div variants={fadeInUp} className="luxury-divider mx-auto" />
           
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+          <motion.div variants={staggerContainer} className="grid grid-cols-2 lg:grid-cols-4 gap-8">
             <motion.div variants={fadeInUp} className="flex flex-col items-center p-6 bg-brand-white rounded-xl shadow-xs border border-brand-border/30 hover:-translate-y-1 hover:shadow-md transition-all duration-300">
               <div className="p-3 bg-brand-gold/10 text-brand-gold rounded-full mb-4">
                 <ShieldCheck size={28} />
@@ -776,7 +778,7 @@ export default function Home() {
               <h4 className="font-display font-semibold text-brand-dark text-sm sm:text-base mb-1.5 uppercase tracking-wide">Easy Returns</h4>
               <p className="text-2xs sm:text-xs text-brand-muted leading-relaxed">Not happy with weight or color? Return within 7 days of delivery.</p>
             </motion.div>
-          </div>
+          </motion.div>
         </div>
       </motion.section>
 
