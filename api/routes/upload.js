@@ -3,13 +3,17 @@ import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { requireAuth } from '../middleware/auth.js';
 
+import dotenv from 'dotenv';
+
+dotenv.config();
+
 const router = express.Router();
 
 // Configure Cloudinary from env
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dt172nx3g',
-  api_key: process.env.CLOUDINARY_API_KEY || '449885275677713',
-  api_secret: process.env.CLOUDINARY_API_SECRET || 'lbmlel900z1gSA6D0USQs6BdGL8',
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 // Use memory storage so we can stream buffer to Cloudinary

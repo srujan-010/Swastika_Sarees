@@ -3,7 +3,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://srujanakulawar_db_user:tcU31htRRb8UYg5V@swastiksarees.xbuihtq.mongodb.net/swastiksarees?retryWrites=true&w=majority&appName=swastiksarees';
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  throw new Error('MONGODB_URI environment variable is missing. Please set it in your .env file.');
+}
 
 let cachedConnection = null;
 let cachedPromise = null;
