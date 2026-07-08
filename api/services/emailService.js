@@ -465,7 +465,7 @@ export async function sendOrderCancelledEmail(order, reason = 'Customer request'
     <div class="summary-box">
       <p style="margin: 0 0 10px 0;"><strong>Reason:</strong> ${reason}</p>
       <p style="margin: 0 0 10px 0;"><strong>Refund Status:</strong> <span class="badge">${isPaid ? 'Refund Initiated' : 'No Payment Deducted'}</span></p>
-      ${isPaid ? \`<p style="margin: 0;"><strong>Expected Refund Time:</strong> 5-7 Business Days</p>\` : ''}
+      ${isPaid ? '<p style="margin: 0;"><strong>Expected Refund Time:</strong> 5-7 Business Days</p>' : ''}
     </div>
     
     <div class="text-center">
@@ -647,7 +647,7 @@ export function sendDailySalesReport(reportData) {
     </div>
   `, 'Daily Sales Report');
 
-  sendAsync({ to: adminEmail, subject: \`Daily Sales Report - \${new Date().toLocaleDateString('en-IN')}\`, html, type: 'daily_report' });
+  sendAsync({ to: adminEmail, subject: `Daily Sales Report - ${new Date().toLocaleDateString('en-IN')}`, html, type: 'daily_report' });
 }
 
 // ─── LEGACY EXPORTS (Kept for compatibility with other files) ────────────────
@@ -655,7 +655,7 @@ export function sendAdminNewCustomer(user) { sendWelcomeEmail(user); }
 export function sendAdminLargeOrder(order) {}
 export function sendAdminPaymentFailure(order, errDetails) {}
 export function sendAdminRefundRequest(order, details) {}
-export function sendOtpEmail(email, code) { sendEmailVerificationEmail(email, \`\${appUrl}/verify-email?code=\${code}\`); }
+export function sendOtpEmail(email, code) { sendEmailVerificationEmail(email, `${appUrl}/verify-email?code=${code}`); }
 export function sendOrderStatusEmail(order, status) {
   if (status === 'confirmed') return sendOrderConfirmedEmail(order);
   if (status === 'packed') return sendOrderPackedEmail(order);
