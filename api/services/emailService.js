@@ -116,85 +116,6 @@ function getLayout(contentHtml, title) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ─── ASYNC QUEUE & RETRY LOGIC ───────────────────────────────────────────────
-const emailQueue = [];
-let isProcessingQueue = false;
-
-async function processQueue() {
-  if (isProcessingQueue) return;
-  isProcessingQueue = true;
-
-  while (emailQueue.length > 0) {
-    const job = emailQueue.shift();
-    
-    let attempts = 0;
-    const maxAttempts = 3;
-    let success = false;
-    
-    while(attempts < maxAttempts && !success) {
-        attempts++;
-        try {
-          const response = await resend.emails.send({
-            from: job.from,
-            to: job.to,
-            reply_to: replyTo,
-            subject: job.subject,
-            html: job.html,
-            text: job.text
-          });
-
-          if (response.error) {
-            throw new Error(response.error.message || 'Resend API returned error');
-          }
-          console.log(`[Email Log]${TEST_MODE ? ' [TEST→' + job.originalRecipient + ']' : ''} Type: ${job.type} | Recipient: ${job.to.join(', ')} | Status: success | ID: ${response.data?.id} | TS: ${new Date().toISOString()}`);
-          success = true;
-        } catch (err) {
-          if (attempts === maxAttempts) {
-             console.error(`[Email Log]${TEST_MODE ? ' [TEST→' + job.originalRecipient + ']' : ''} Type: ${job.type} | Recipient: ${job.to.join(', ')} | Status: failed | Error: ${err.message} | TS: ${new Date().toISOString()}`);
-          } else {
-             await new Promise(resolve => setTimeout(resolve, 1000 * attempts)); // Backoff 1s, 2s
-          }
-        }
-    }
-
-    // 150ms pause between successful sends
-    if (emailQueue.length > 0) {
-      await new Promise(resolve => setTimeout(resolve, 150));
-    }
-  }
-
-  isProcessingQueue = false;
-}
-
-function sendAsync({ to, subject, html, text, type }) {
-  const originalRecipient = Array.isArray(to) ? to.join(', ') : to;
-
-  const finalTo = TEST_MODE
-    ? [TEST_EMAIL_OVERRIDE]
-    : (Array.isArray(to) ? to : [to]);
-
-  const finalSubject = TEST_MODE
-    ? `[TEST] ${subject}`
-    : subject;
-
-  const finalHtml = TEST_MODE
-    ? html.replace('<div class="body">', `<div class="body">${getTestBanner(originalRecipient)}`)
-    : html;
-
-  emailQueue.push({
-    from: fromEmail,
-    to: finalTo,
-    subject: finalSubject,
-    html: finalHtml,
-    text: text || finalHtml.replace(/<[^>]*>/g, ''),
-    type,
-    originalRecipient
-  });
-
-  setImmediate(() => processQueue());
-}
-// ─────────────────────────────────────────────────────────────────────────────
-
 // Helper to safely get user email
 async function resolveCustomerEmail(order) {
   let email = order.shippingAddress?.email;
@@ -202,16 +123,57 @@ async function resolveCustomerEmail(order) {
     try {
       const u = await User.findOne({ id: order.user });
       if (u) email = u.email;
-    } catch(e) {}
+    } catch(e) {
+      console.error('Error finding user for email:', e.message);
+    }
   }
   return email;
 }
+
+// ─── EMAIL SENDER HELPER ──────────────────────────────────────────────────────
+async function sendEmail({ to, subject, html, text }) {
+  console.log(`\nPreparing email...`);
+  console.log(`Recipient: ${to}`);
+  console.log(`Subject: ${subject}`);
+  
+  const finalTo = TEST_MODE ? [TEST_EMAIL_OVERRIDE] : to;
+  const finalSubject = TEST_MODE ? `[TEST] ${subject}` : subject;
+  const originalRecipient = Array.isArray(to) ? to.join(', ') : to;
+  
+  const finalHtml = TEST_MODE
+    ? html.replace('<div class="body">', `<div class="body">${getTestBanner(originalRecipient)}`)
+    : html;
+
+  try {
+    const response = await resend.emails.send({
+      from: fromEmail,
+      to: finalTo,
+      reply_to: replyTo,
+      subject: finalSubject,
+      html: finalHtml,
+      text: text || finalHtml.replace(/<[^>]*>/g, '')
+    });
+
+    if (response.error) {
+      throw new Error(response.error.message || 'Resend API returned error');
+    }
+    
+    console.log(`Email sent successfully`);
+    console.log(`Resend Response: ${JSON.stringify(response.data)}`);
+    return response.data;
+  } catch (err) {
+    console.error(`Email failed`);
+    console.error(`Resend Error: ${err.message}`);
+    throw err;
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 const formatCurrency = (amountInPaise) => `₹${(amountInPaise / 100).toFixed(2)}`;
 const formatDate = (date) => new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 
 // ─── 1. Welcome Email (User Registration) ────────────────────────────────────
-export function sendWelcomeEmail(user) {
+export async function sendWelcomeEmail(user) {
   const name = user.fullName || 'Customer';
   const html = getLayout(`
     <h2>Welcome to Swastika Sarees ✨</h2>
@@ -234,14 +196,14 @@ export function sendWelcomeEmail(user) {
     </div>
   `, 'Welcome to Swastika Sarees');
 
-  sendAsync({ to: user.email, subject: 'Welcome to Swastika Sarees ✨', html, type: 'welcome' });
+  await sendEmail({ to: user.email, subject: 'Welcome to Swastika Sarees ✨', html, type: 'welcome' });
 }
 
 // ─── 2. Order Placed Email ───────────────────────────────────────────────────
 export async function sendOrderPlacedEmail(order) {
   const name = order.shippingAddress?.name || 'Customer';
   const email = await resolveCustomerEmail(order);
-  if (!email) return;
+  if (!email) throw new Error('Customer email missing. Cannot send email.');
 
   const itemsHtml = (order.items || []).map(item => `
     <tr>
@@ -311,13 +273,13 @@ export async function sendOrderPlacedEmail(order) {
     </div>
   `, 'Order Placed Successfully');
 
-  sendAsync({ to: email, subject: 'Your Order has been Placed Successfully 🎉', html, type: 'order_placed' });
+  await sendEmail({ to: email, subject: 'Your Order has been Placed Successfully 🎉', html, type: 'order_placed' });
 }
 
 // ─── 3. Order Confirmed Email ────────────────────────────────────────────────
 export async function sendOrderConfirmedEmail(order) {
   const email = await resolveCustomerEmail(order);
-  if (!email) return;
+  if (!email) throw new Error('Customer email missing. Cannot send email.');
 
   const dispatchDate = new Date();
   dispatchDate.setDate(dispatchDate.getDate() + 2);
@@ -340,13 +302,13 @@ export async function sendOrderConfirmedEmail(order) {
     </div>
   `, 'Order Confirmed');
 
-  sendAsync({ to: email, subject: 'Your Order is Confirmed ✅', html, type: 'order_confirmed' });
+  await sendEmail({ to: email, subject: 'Your Order is Confirmed ✅', html, type: 'order_confirmed' });
 }
 
 // ─── 4. Order Packed / Ready to Dispatch Email ───────────────────────────────
 export async function sendOrderPackedEmail(order) {
   const email = await resolveCustomerEmail(order);
-  if (!email) return;
+  if (!email) throw new Error('Customer email missing. Cannot send email.');
 
   const html = getLayout(`
     <h2>Your Order is Packed 📦</h2>
@@ -364,13 +326,13 @@ export async function sendOrderPackedEmail(order) {
     </div>
   `, 'Order Packed');
 
-  sendAsync({ to: email, subject: 'Your Order is Packed 📦', html, type: 'order_packed' });
+  await sendEmail({ to: email, subject: 'Your Order is Packed 📦', html, type: 'order_packed' });
 }
 
 // ─── 5. Order Shipped Email ──────────────────────────────────────────────────
 export async function sendOrderShippedEmail(order) {
   const email = await resolveCustomerEmail(order);
-  if (!email) return;
+  if (!email) throw new Error('Customer email missing. Cannot send email.');
 
   const courier = order.tracking?.courierName || 'Our Delivery Partner';
   const trackingNo = order.tracking?.trackingNumber || 'Awaiting Tracking ID';
@@ -395,13 +357,13 @@ export async function sendOrderShippedEmail(order) {
     </div>
   `, 'Order Shipped');
 
-  sendAsync({ to: email, subject: 'Your Order has been Shipped 🚚', html, type: 'order_shipped' });
+  await sendEmail({ to: email, subject: 'Your Order has been Shipped 🚚', html, type: 'order_shipped' });
 }
 
 // ─── 6. Out For Delivery Email ───────────────────────────────────────────────
 export async function sendOutForDeliveryEmail(order) {
   const email = await resolveCustomerEmail(order);
-  if (!email) return;
+  if (!email) throw new Error('Customer email missing. Cannot send email.');
 
   const courier = order.tracking?.courierName || 'Our Delivery Partner';
   const trackingNo = order.tracking?.trackingNumber || 'N/A';
@@ -427,13 +389,13 @@ export async function sendOutForDeliveryEmail(order) {
     </div>
   `, 'Out For Delivery');
 
-  sendAsync({ to: email, subject: 'Your Order is Out for Delivery 🚀', html, type: 'out_for_delivery' });
+  await sendEmail({ to: email, subject: 'Your Order is Out for Delivery 🚀', html, type: 'out_for_delivery' });
 }
 
 // ─── 7. Order Delivered Email ────────────────────────────────────────────────
 export async function sendOrderDeliveredEmail(order) {
   const email = await resolveCustomerEmail(order);
-  if (!email) return;
+  if (!email) throw new Error('Customer email missing. Cannot send email.');
 
   const html = getLayout(`
     <h2>Your Order has been Delivered ❤️</h2>
@@ -447,13 +409,13 @@ export async function sendOrderDeliveredEmail(order) {
     </div>
   `, 'Order Delivered');
 
-  sendAsync({ to: email, subject: 'Your Order has been Delivered ❤️', html, type: 'order_delivered' });
+  await sendEmail({ to: email, subject: 'Your Order has been Delivered ❤️', html, type: 'order_delivered' });
 }
 
 // ─── 8. Order Cancelled Email ────────────────────────────────────────────────
 export async function sendOrderCancelledEmail(order, reason = 'Customer request') {
   const email = await resolveCustomerEmail(order);
-  if (!email) return;
+  if (!email) throw new Error('Customer email missing. Cannot send email.');
   
   const isPaid = order.payment?.status === 'paid' || order.payment?.status === 'refund_pending' || order.payment?.status === 'refunded';
 
@@ -473,13 +435,13 @@ export async function sendOrderCancelledEmail(order, reason = 'Customer request'
     </div>
   `, 'Order Cancelled');
 
-  sendAsync({ to: email, subject: 'Your Order has been Cancelled', html, type: 'order_cancelled' });
+  await sendEmail({ to: email, subject: 'Your Order has been Cancelled', html, type: 'order_cancelled' });
 }
 
 // ─── 9. Refund Initiated Email ───────────────────────────────────────────────
 export async function sendRefundInitiatedEmail(order) {
   const email = await resolveCustomerEmail(order);
-  if (!email) return;
+  if (!email) throw new Error('Customer email missing. Cannot send email.');
 
   const html = getLayout(`
     <h2>Refund Initiated 💳</h2>
@@ -493,13 +455,13 @@ export async function sendRefundInitiatedEmail(order) {
     </div>
   `, 'Refund Initiated');
 
-  sendAsync({ to: email, subject: 'Refund Initiated 💳', html, type: 'refund_initiated' });
+  await sendEmail({ to: email, subject: 'Refund Initiated 💳', html, type: 'refund_initiated' });
 }
 
 // ─── 10. Refund Completed Email ──────────────────────────────────────────────
 export async function sendRefundCompletedEmail(order) {
   const email = await resolveCustomerEmail(order);
-  if (!email) return;
+  if (!email) throw new Error('Customer email missing. Cannot send email.');
 
   const html = getLayout(`
     <h2>Refund Completed Successfully</h2>
@@ -514,11 +476,11 @@ export async function sendRefundCompletedEmail(order) {
     <p>Please check your bank statement. If you do not see the credit within 24 hours, please contact your bank with the Transaction ID.</p>
   `, 'Refund Completed');
 
-  sendAsync({ to: email, subject: 'Refund Completed Successfully', html, type: 'refund_completed' });
+  await sendEmail({ to: email, subject: 'Refund Completed Successfully', html, type: 'refund_completed' });
 }
 
 // ─── 11. Password Reset Email ────────────────────────────────────────────────
-export function sendPasswordResetEmail(email, resetLink) {
+export async function sendPasswordResetEmail(email, resetLink) {
   const html = getLayout(`
     <h2>Reset Your Password</h2>
     <p>We received a request to reset your password for your Swastika Sarees account.</p>
@@ -531,11 +493,11 @@ export function sendPasswordResetEmail(email, resetLink) {
     <p style="font-size: 13px; color: #666; margin-top: 20px;">If you didn't request a password reset, you can safely ignore this email.</p>
   `, 'Reset Password');
 
-  sendAsync({ to: email, subject: 'Reset Your Password', html, type: 'password_reset' });
+  await sendEmail({ to: email, subject: 'Reset Your Password', html, type: 'password_reset' });
 }
 
 // ─── 12. Email Verification ──────────────────────────────────────────────────
-export function sendEmailVerificationEmail(email, verifyLink) {
+export async function sendEmailVerificationEmail(email, verifyLink) {
   const html = getLayout(`
     <h2>Verify Your Email Address</h2>
     <p>Welcome to Swastika Sarees!</p>
@@ -546,11 +508,11 @@ export function sendEmailVerificationEmail(email, verifyLink) {
     </div>
   `, 'Verify Email');
 
-  sendAsync({ to: email, subject: 'Verify Your Email Address', html, type: 'email_verification' });
+  await sendEmail({ to: email, subject: 'Verify Your Email Address', html, type: 'email_verification' });
 }
 
 // ─── 13. Admin New Order Email ───────────────────────────────────────────────
-export function sendAdminNewOrder(order) {
+export async function sendAdminNewOrder(order) {
   const itemsHtml = (order.items || []).map(item => `
     <li>${item.quantity}x ${item.name} (${item.color || ''} ${item.size || ''})</li>
   `).join('');
@@ -579,11 +541,11 @@ export function sendAdminNewOrder(order) {
     </div>
   `, `New Order #${order.orderId}`);
 
-  sendAsync({ to: adminEmail, subject: `New Order Received - #${order.orderId}`, html, type: 'admin_new_order' });
+  await sendEmail({ to: adminEmail, subject: `New Order Received - #${order.orderId}`, html, type: 'admin_new_order' });
 }
 
 // ─── 14. Low Stock Alert ─────────────────────────────────────────────────────
-export function sendAdminLowStockAlert(product, variantInfo = 'Main Product', remainingStock = 0) {
+export async function sendAdminLowStockAlert(product, variantInfo = 'Main Product', remainingStock = 0) {
   const html = getLayout(`
     <h2 style="color: #b91c1c;">Low Stock Alert ⚠️</h2>
     <p>Action required: A product's inventory has fallen below the minimum threshold (5 units).</p>
@@ -599,11 +561,11 @@ export function sendAdminLowStockAlert(product, variantInfo = 'Main Product', re
     </div>
   `, 'Low Stock Alert');
 
-  sendAsync({ to: adminEmail, subject: 'Low Stock Alert', html, type: 'admin_low_stock' });
+  await sendEmail({ to: adminEmail, subject: 'Low Stock Alert', html, type: 'admin_low_stock' });
 }
 
 // ─── 15. Daily Sales Report ──────────────────────────────────────────────────
-export function sendDailySalesReport(reportData) {
+export async function sendDailySalesReport(reportData) {
   const topProductsHtml = (reportData.topProducts || []).map(p => `<li>${p.name} - ${p.sales} sold</li>`).join('');
   const lowStockHtml = (reportData.lowStockProducts || []).map(p => `<li>${p.name} (${p.stock} left)</li>`).join('');
 
@@ -647,7 +609,7 @@ export function sendDailySalesReport(reportData) {
     </div>
   `, 'Daily Sales Report');
 
-  sendAsync({ to: adminEmail, subject: `Daily Sales Report - ${new Date().toLocaleDateString('en-IN')}`, html, type: 'daily_report' });
+  await sendEmail({ to: adminEmail, subject: `Daily Sales Report - ${new Date().toLocaleDateString('en-IN')}`, html, type: 'daily_report' });
 }
 
 // ─── LEGACY EXPORTS (Kept for compatibility with other files) ────────────────
