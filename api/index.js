@@ -457,13 +457,11 @@ app.use('/api/orders', ordersRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/popup', popupRouter);
 app.use('/api/email-test', emailTestRouter);
-app.use('/api/auth', emailTestRouter);
 
-// Start Express server locally in development
+// Start Express server
 const PORT = process.env.PORT || 5005;
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.log(`Server is running locally on port ${PORT}`);
-  });
-}
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
 export default app;
