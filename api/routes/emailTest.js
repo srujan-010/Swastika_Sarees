@@ -119,7 +119,7 @@ router.post('/trigger-all', async (req, res) => {
 
   // Run all triggers
   emailService.sendWelcomeEmail(mockUser);
-  emailService.sendOrderConfirmationEmail(mockOrder);
+  emailService.sendOrderPlacedEmail(mockOrder);
   emailService.sendPaymentSuccessfulEmail(mockOrder);
   emailService.sendOrderStatusEmail(mockOrder, 'confirmed');
   emailService.sendOrderStatusEmail(mockOrder, 'processing');
@@ -140,7 +140,7 @@ router.post('/trigger-all', async (req, res) => {
   emailService.sendAdminLargeOrder({ ...mockOrder, pricing: { ...mockOrder.pricing, total: 2500000 } });
   emailService.sendAdminPaymentFailure(mockOrder, 'Signature check failure: generated hash mismatch.');
   emailService.sendAdminRefundRequest(mockOrder, '[Return Request: refund] Reason: Color variance from image display.');
-  emailService.sendAdminLowStock(mockProduct, 'Main product (Royal Banarasi Silk Saree)');
+  emailService.sendAdminLowStockAlert(mockProduct, 'Main product (Royal Banarasi Silk Saree)', 4);
 
   // Marketing
   emailService.sendMarketingEmail('festival', targetEmail);

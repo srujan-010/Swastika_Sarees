@@ -178,7 +178,7 @@ router.post('/', async (req, res) => {
       await item.product.save();
       // Check if product stock is low (threshold of 5 items)
       if (item.product.stock <= 5) {
-        emailService.sendAdminLowStock(item.product, item.color || item.size ? `${item.color || ''} ${item.size || ''}` : 'Main product');
+        emailService.sendAdminLowStockAlert(item.product, item.color || item.size ? `${item.color || ''} ${item.size || ''}` : 'Main product');
       }
     }
 
@@ -224,7 +224,7 @@ router.post('/', async (req, res) => {
     });
 
     // Asynchronously trigger emails without blocking Express response
-    emailService.sendOrderConfirmationEmail(order);
+    emailService.sendOrderPlacedEmail(order);
     emailService.sendAdminNewOrder(order);
 
     if (order.pricing.total > 2000000) { // Large Order Alert (threshold ₹20,000 in paise)

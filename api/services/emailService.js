@@ -4,18 +4,15 @@ import { User } from '../db/models.js';
 
 dotenv.config();
 
-
 const apiKey = process.env.RESEND_API_KEY || 're_em2kEbZW_4Ar7jESGUHZqKbea6kPU4c4L';
-const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+const fromEmail = 'Swastika Sarees <noreply@swastikasarees.com>';
+const replyTo = 'sareesswastika@gmail.com';
 const adminEmail = process.env.ADMIN_EMAIL || 'sareesswastika@gmail.com';
 const appUrl = process.env.APP_URL || 'http://localhost:3005';
 const companyName = process.env.COMPANY_NAME || 'Swastika Sarees';
 
 // ─── TEST MODE CONFIGURATION ────────────────────────────────────────────────
-// When TEST_MODE=true ALL emails are redirected to TEST_EMAIL_OVERRIDE.
-// This prevents accidental real-customer emails during development.
-// Set TEST_MODE=false and configure a verified Resend domain for production.
-const TEST_MODE = process.env.TEST_MODE !== 'false'; // defaults to true
+const TEST_MODE = process.env.TEST_MODE !== 'false';
 const TEST_EMAIL_OVERRIDE = process.env.TEST_EMAIL_OVERRIDE || adminEmail;
 
 if (TEST_MODE) {
@@ -27,7 +24,7 @@ if (TEST_MODE) {
 
 const resend = new Resend(apiKey);
 
-// Helper to inject a test mode banner at the top of the email body
+// Helper to inject a test mode banner
 function getTestBanner(originalRecipient) {
   if (!TEST_MODE) return '';
   return `
@@ -40,26 +37,51 @@ function getTestBanner(originalRecipient) {
   `;
 }
 
-// Helper to wrap all HTML templates in standard Vogue brand layout
+// ─── PREMIUM BRAND LAYOUT ──────────────────────────────────────────────────
 function getLayout(contentHtml, title) {
+  const brandCrimson = '#8B1A1A';
+  const brandGold = '#C8832A';
+  
   return `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${title}</title>
         <style>
-          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #fcf9f5; color: #2d2323; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
-          .container { max-width: 600px; margin: 20px auto; background: #ffffff; border: 1px solid #e8dfd5; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.03); }
-          .header { background-color: #8b1a1a; padding: 28px; text-align: center; border-bottom: 3px solid #D4AF37; }
-          .logo { font-size: 26px; font-weight: bold; color: #fcf9f5; text-transform: uppercase; letter-spacing: 0.12em; margin: 0; }
-          .tagline { font-size: 11px; color: #e8d5c4; letter-spacing: 0.05em; margin: 4px 0 0 0; font-style: italic; }
-          .body { padding: 32px 28px; line-height: 1.6; font-size: 14px; }
-          .button { display: inline-block; background-color: #8b1a1a; color: #fcf9f5 !important; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; margin: 18px 0; border: 1px solid #D4AF37; text-align: center; }
-          .footer { background-color: #fffaf5; padding: 24px; text-align: center; font-size: 11px; color: #887878; border-top: 1px solid #f0e6da; }
-          .footer a { color: #8b1a1a; text-decoration: none; font-weight: bold; }
-          .divider { height: 1px; bg-color: #f0e6da; margin: 20px 0; }
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #fcf9f5; color: #1a0505; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+          .container { max-width: 600px; margin: 20px auto; background: #ffffff; border: 1px solid #e8dfd5; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 24px rgba(139, 26, 26, 0.04); }
+          .header { background-color: ${brandCrimson}; padding: 32px 24px; text-align: center; border-bottom: 4px solid ${brandGold}; }
+          .logo { font-size: 28px; font-weight: bold; color: #ffffff; text-transform: uppercase; letter-spacing: 0.15em; margin: 0; font-family: 'Georgia', serif; }
+          .tagline { font-size: 12px; color: #fcf9f5; letter-spacing: 0.08em; margin: 8px 0 0 0; font-style: italic; opacity: 0.9; }
+          .body { padding: 40px 32px; line-height: 1.6; font-size: 15px; color: #333333; }
+          .button { display: inline-block; background-color: ${brandCrimson}; color: #ffffff !important; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; margin: 24px 10px 24px 0; border: 1px solid ${brandGold}; text-align: center; transition: all 0.3s ease; }
+          .button-secondary { background-color: #ffffff; color: ${brandCrimson} !important; border: 1px solid ${brandCrimson}; }
+          .footer { background-color: #f8f5f0; padding: 32px 24px; text-align: center; font-size: 12px; color: #666666; border-top: 1px solid #e8dfd5; }
+          .footer a { color: ${brandCrimson}; text-decoration: none; font-weight: 600; }
+          .social-links { margin: 20px 0; }
+          .social-links a { margin: 0 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: ${brandGold}; }
+          .divider { height: 1px; background-color: #e8dfd5; margin: 24px 0; }
+          h2 { color: ${brandCrimson}; font-size: 22px; margin-top: 0; margin-bottom: 16px; font-weight: 600; }
+          
+          /* Shared Element Styles */
+          .order-table { width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 24px; font-size: 14px; }
+          .order-table th { background-color: #fcf9f5; color: ${brandCrimson}; text-align: left; padding: 12px; border-bottom: 2px solid #e8dfd5; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+          .order-table td { padding: 16px 12px; border-bottom: 1px solid #f0e6da; vertical-align: top; }
+          .product-img { width: 60px; height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid #e8dfd5; }
+          .summary-box { background-color: #fcf9f5; border: 1px solid #e8dfd5; border-radius: 8px; padding: 20px; margin: 20px 0; }
+          .summary-row { display: flex; justify-content: space-between; padding: 6px 0; }
+          .summary-total { border-top: 2px solid ${brandCrimson}; margin-top: 12px; padding-top: 12px; font-weight: bold; font-size: 16px; color: ${brandCrimson}; }
+          .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; background: #e8dfd5; color: ${brandCrimson}; margin-top: 4px; }
+          .text-center { text-align: center; }
+          
+          @media only screen and (max-width: 600px) {
+            .container { margin: 0; border-radius: 0; border: none; box-shadow: none; }
+            .body { padding: 24px 20px; }
+            .product-img { width: 50px; height: 66px; }
+            .button { display: block; margin: 16px 0; width: 100%; box-sizing: border-box; }
+          }
         </style>
       </head>
       <body>
@@ -72,20 +94,29 @@ function getLayout(contentHtml, title) {
             ${contentHtml}
           </div>
           <div class="footer">
-            <p>Thank you for choosing Swastika Sarees!</p>
-            <p>Secunderabad, Telangana | GSTIN: 36AAAAA0000A1Z5</p>
-            <p>For support, consult via WhatsApp at <a href="https://wa.me/919999999999">919999999999</a> or email support@swastikasarees.com</p>
-            <div style="margin-top: 12px; font-size: 10px;">
-              <a href="${appUrl}">Website</a> | <a href="https://instagram.com/swastikasarees_">Instagram</a> | <a href="${appUrl}/account">My Account</a>
+            <p>Thank you for choosing Swastika Sarees.</p>
+            <p>Need help? Reply to this email or contact us anytime.</p>
+            <p>For instant support, consult via WhatsApp at <a href="https://wa.me/919999999999">+91 99999 99999</a></p>
+            
+            <div class="social-links">
+              <a href="${appUrl}">Website</a> | 
+              <a href="https://instagram.com/swastikasarees_">Instagram</a> | 
+              <a href="https://facebook.com/swastikasarees">Facebook</a>
             </div>
+            
+            <p style="margin-top: 24px; font-size: 10px; color: #999;">
+              Secunderabad, Telangana | GSTIN: 36AAAAA0000A1Z5<br>
+              © ${new Date().getFullYear()} ${companyName}. All rights reserved.
+            </p>
           </div>
         </div>
       </body>
     </html>
   `;
 }
+// ─────────────────────────────────────────────────────────────────────────────
 
-// In-memory email queue with 150ms stagger to respect Resend's 10 req/s limit
+// ─── ASYNC QUEUE & RETRY LOGIC ───────────────────────────────────────────────
 const emailQueue = [];
 let isProcessingQueue = false;
 
@@ -95,24 +126,38 @@ async function processQueue() {
 
   while (emailQueue.length > 0) {
     const job = emailQueue.shift();
-    try {
-      const response = await resend.emails.send({
-        from: job.from,
-        to: job.to,
-        subject: job.subject,
-        html: job.html,
-        text: job.text
-      });
+    
+    let attempts = 0;
+    const maxAttempts = 3;
+    let success = false;
+    
+    while(attempts < maxAttempts && !success) {
+        attempts++;
+        try {
+          const response = await resend.emails.send({
+            from: job.from,
+            to: job.to,
+            reply_to: replyTo,
+            subject: job.subject,
+            html: job.html,
+            text: job.text
+          });
 
-      if (response.error) {
-        throw new Error(response.error.message || 'Resend API returned error');
-      }
-      console.log(`[Email Log]${TEST_MODE ? ' [TEST→' + job.originalRecipient + ']' : ''} Type: ${job.type} | Recipient: ${job.to.join(', ')} | Status: success | ID: ${response.data?.id} | TS: ${new Date().toISOString()}`);
-    } catch (err) {
-      console.error(`[Email Log]${TEST_MODE ? ' [TEST→' + job.originalRecipient + ']' : ''} Type: ${job.type} | Recipient: ${job.to.join(', ')} | Status: failed | Error: ${err.message} | TS: ${new Date().toISOString()}`);
+          if (response.error) {
+            throw new Error(response.error.message || 'Resend API returned error');
+          }
+          console.log(`[Email Log]${TEST_MODE ? ' [TEST→' + job.originalRecipient + ']' : ''} Type: ${job.type} | Recipient: ${job.to.join(', ')} | Status: success | ID: ${response.data?.id} | TS: ${new Date().toISOString()}`);
+          success = true;
+        } catch (err) {
+          if (attempts === maxAttempts) {
+             console.error(`[Email Log]${TEST_MODE ? ' [TEST→' + job.originalRecipient + ']' : ''} Type: ${job.type} | Recipient: ${job.to.join(', ')} | Status: failed | Error: ${err.message} | TS: ${new Date().toISOString()}`);
+          } else {
+             await new Promise(resolve => setTimeout(resolve, 1000 * attempts)); // Backoff 1s, 2s
+          }
+        }
     }
 
-    // 150ms pause between sends (= ~6 emails/sec, stays under 10 req/s limit)
+    // 150ms pause between successful sends
     if (emailQueue.length > 0) {
       await new Promise(resolve => setTimeout(resolve, 150));
     }
@@ -121,20 +166,17 @@ async function processQueue() {
   isProcessingQueue = false;
 }
 
-// Master Asynchronous Send Trigger (Does not block Express responses)
 function sendAsync({ to, subject, html, text, type }) {
   const originalRecipient = Array.isArray(to) ? to.join(', ') : to;
 
-  // In TEST_MODE: override recipient & inject test banner into the HTML body
   const finalTo = TEST_MODE
     ? [TEST_EMAIL_OVERRIDE]
     : (Array.isArray(to) ? to : [to]);
 
   const finalSubject = TEST_MODE
-    ? `[TEST] ${companyName} | ${subject}`
-    : `${companyName} | ${subject}`;
+    ? `[TEST] ${subject}`
+    : subject;
 
-  // Inject test banner right after <div class="body">
   const finalHtml = TEST_MODE
     ? html.replace('<div class="body">', `<div class="body">${getTestBanner(originalRecipient)}`)
     : html;
@@ -149,526 +191,476 @@ function sendAsync({ to, subject, html, text, type }) {
     originalRecipient
   });
 
-  // Kick off the queue processing in the background (non-blocking)
   setImmediate(() => processQueue());
 }
+// ─────────────────────────────────────────────────────────────────────────────
 
+// Helper to safely get user email
+async function resolveCustomerEmail(order) {
+  let email = order.shippingAddress?.email;
+  if (!email && order.user && order.user !== 'guest') {
+    try {
+      const u = await User.findOne({ id: order.user });
+      if (u) email = u.email;
+    } catch(e) {}
+  }
+  return email;
+}
 
-// ----------------------------------------------------------------------
-// CUSTOMER TRANSACTIONAL EMAIL TEMPLATES
-// ----------------------------------------------------------------------
+const formatCurrency = (amountInPaise) => `₹${(amountInPaise / 100).toFixed(2)}`;
+const formatDate = (date) => new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 
+// ─── 1. Welcome Email (User Registration) ────────────────────────────────────
 export function sendWelcomeEmail(user) {
   const name = user.fullName || 'Customer';
   const html = getLayout(`
-    <h2>Welcome to ${companyName}, ${name}!</h2>
-    <p>We are delighted to welcome you to our family. Swastika Sarees brings you curated handpicked Banarasi silks, floral print georgettes, cotton Kurtis, and dress materials crafted by master artisans.</p>
-    <p>Explore our premium collections tailored to celebrate every festive spark, wedding elegance, and daily charm.</p>
-    <div style="text-align: center;">
-      <a href="${appUrl}/shop" class="button">Start Shopping Now</a>
+    <h2>Welcome to Swastika Sarees ✨</h2>
+    <p>Dear ${name},</p>
+    <p>Thank you for joining the Swastika Sarees family! We are delighted to welcome you to our exclusive world of premium ethnic luxury wear.</p>
+    
+    <div class="summary-box">
+      <h3 style="margin-top:0; color: #8B1A1A;">Your Exclusive Benefits:</h3>
+      <ul style="padding-left: 20px; margin-bottom: 0;">
+        <li style="margin-bottom: 8px;">✨ <strong>Exclusive Offers:</strong> Access to members-only sales.</li>
+        <li style="margin-bottom: 8px;">🚀 <strong>Faster Checkout:</strong> Save your details for seamless shopping.</li>
+        <li style="margin-bottom: 8px;">📦 <strong>Order Tracking:</strong> Live updates on your premium boxes.</li>
+        <li style="margin-bottom: 8px;">❤️ <strong>Wishlist:</strong> Save your favorite handcrafted designs.</li>
+        <li>👗 <strong>Premium Collections:</strong> Early access to new bridal and festive weaves.</li>
+      </ul>
     </div>
-    <p>For custom consultations, customized sizing, and video showings, consult directly with our boutique styling team on WhatsApp!</p>
+    
+    <div class="text-center">
+      <a href="${appUrl}/shop" class="button">Start Shopping</a>
+    </div>
   `, 'Welcome to Swastika Sarees');
 
-  sendAsync({
-    to: user.email,
-    subject: 'Welcome to Swastika Sarees!',
-    html,
-    type: 'welcome'
-  });
+  sendAsync({ to: user.email, subject: 'Welcome to Swastika Sarees ✨', html, type: 'welcome' });
 }
 
-export async function sendOrderConfirmationEmail(order) {
-  const name = order.shippingAddress.name || 'Customer';
-  const deliveryEstimation = new Date();
-  deliveryEstimation.setDate(deliveryEstimation.getDate() + 4);
-  const formattedDate = deliveryEstimation.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+// ─── 2. Order Placed Email ───────────────────────────────────────────────────
+export async function sendOrderPlacedEmail(order) {
+  const name = order.shippingAddress?.name || 'Customer';
+  const email = await resolveCustomerEmail(order);
+  if (!email) return;
 
-  const itemsRows = order.items.map(item => `
+  const itemsHtml = (order.items || []).map(item => `
     <tr>
-      <td style="padding: 10px; border-bottom: 1px solid #f0e6da;">
-        <strong>${item.name}</strong><br>
-        <span style="font-size: 11px; color: #887878;">Color: ${item.color || 'N/A'}, Size: ${item.size || 'N/A'}</span>
+      <td style="width: 70px;">
+        <img src="${item.imageUrl || 'https://via.placeholder.com/60x80'}" class="product-img" alt="${item.name}">
       </td>
-      <td style="padding: 10px; border-bottom: 1px solid #f0e6da; text-align: center;">${item.quantity}</td>
-      <td style="padding: 10px; border-bottom: 1px solid #f0e6da; text-align: right;">₹${(item.price / 100).toFixed(2)}</td>
-      <td style="padding: 10px; border-bottom: 1px solid #f0e6da; text-align: right;">₹${((item.price * item.quantity) / 100).toFixed(2)}</td>
+      <td>
+        <strong style="display:block; margin-bottom: 4px;">${item.name}</strong>
+        <span style="font-size: 11px; color: #666; display: block;">Color: ${item.color || 'N/A'} | Size: ${item.size || 'N/A'}</span>
+        <span style="font-size: 11px; color: #666; display: block;">Qty: ${item.quantity} × ${formatCurrency(item.price)}</span>
+      </td>
+      <td style="text-align: right; font-weight: 600;">
+        ${formatCurrency(item.price * item.quantity)}
+      </td>
     </tr>
   `).join('');
 
   const html = getLayout(`
-    <h2>Thank you for your purchase!</h2>
-    <p>Your order <strong>${order.orderId}</strong> has been successfully placed. Here are your order details:</p>
+    <h2>Your Order has been Placed Successfully 🎉</h2>
+    <p>Dear ${name},</p>
+    <p>Thank you for your purchase! We've received your order and are currently processing it.</p>
     
-    <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px;">
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; margin-bottom: 20px; font-size: 13px;">
+      <div style="flex: 1; min-width: 200px;">
+        <strong>Order ID:</strong> ${order.orderId}<br>
+        <strong>Order Date:</strong> ${formatDate(order.createdAt || new Date())}
+      </div>
+      <div style="flex: 1; min-width: 200px; text-align: right;">
+        <strong>Payment Method:</strong> ${order.payment?.method?.toUpperCase() || 'N/A'}<br>
+        <strong>Payment Status:</strong> <span class="badge">${order.payment?.status || 'Pending'}</span>
+      </div>
+    </div>
+
+    <table class="order-table">
       <thead>
-        <tr style="background-color: #fff8f0; color: #8b1a1a; text-align: left;">
-          <th style="padding: 10px; border-bottom: 2px solid #e8dfd5;">Item Description</th>
-          <th style="padding: 10px; border-bottom: 2px solid #e8dfd5; text-align: center;">Qty</th>
-          <th style="padding: 10px; border-bottom: 2px solid #e8dfd5; text-align: right;">Unit Price</th>
-          <th style="padding: 10px; border-bottom: 2px solid #e8dfd5; text-align: right;">Amount</th>
+        <tr>
+          <th colspan="2">Ordered Products</th>
+          <th style="text-align: right;">Total</th>
         </tr>
       </thead>
       <tbody>
-        ${itemsRows}
+        ${itemsHtml}
       </tbody>
     </table>
 
-    <div style="float: right; width: 260px; margin-top: 15px; font-size: 12px;">
-      <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-        <span>Subtotal:</span>
-        <span>₹${(order.pricing.subtotal / 100).toFixed(2)}</span>
-      </div>
-      ${order.pricing.couponDiscount > 0 ? `
-      <div style="display: flex; justify-content: space-between; padding: 4px 0; color: #15803d;">
-        <span>Coupon Discount:</span>
-        <span>-₹${(order.pricing.couponDiscount / 100).toFixed(2)}</span>
-      </div>
-      ` : ''}
-      <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-        <span>Shipping:</span>
-        <span>${order.pricing.shippingCharge > 0 ? `₹${(order.pricing.shippingCharge / 100).toFixed(2)}` : 'FREE'}</span>
-      </div>
-      <div style="display: flex; justify-content: space-between; padding: 6px 0; border-top: 2px solid #8b1a1a; font-weight: bold; color: #8b1a1a; font-size: 14px; margin-top: 6px;">
-        <span>Grand Total:</span>
-        <span>₹${(order.pricing.total / 100).toFixed(2)}</span>
-      </div>
+    <div class="summary-box" style="margin-left: auto; width: 250px;">
+      <div class="summary-row"><span>Subtotal:</span> <span>${formatCurrency(order.pricing?.subtotal || 0)}</span></div>
+      ${order.pricing?.couponDiscount > 0 ? `<div class="summary-row" style="color: #15803d;"><span>Discount:</span> <span>-${formatCurrency(order.pricing.couponDiscount)}</span></div>` : ''}
+      <div class="summary-row"><span>Shipping:</span> <span>${order.pricing?.shippingCharge > 0 ? formatCurrency(order.pricing.shippingCharge) : 'FREE'}</span></div>
+      <div class="summary-row summary-total"><span>Grand Total:</span> <span>${formatCurrency(order.pricing?.total || 0)}</span></div>
     </div>
     
-    <div style="clear: both; margin-top: 30px; font-size: 13px;">
-      <h3 style="color: #8b1a1a; margin-bottom: 5px;">Shipping Address</h3>
-      <div><strong>${order.shippingAddress.name}</strong></div>
-      <div>${order.shippingAddress.line1}</div>
-      ${order.shippingAddress.line2 ? `<div>${order.shippingAddress.line2}</div>` : ''}
-      <div>${order.shippingAddress.city}, ${order.shippingAddress.state} - ${order.shippingAddress.pincode}</div>
-      <div>Phone: ${order.shippingAddress.phone}</div>
-      
-      <p style="margin-top: 20px;"><strong>Payment Method:</strong> ${order.payment.method.toUpperCase()} (${order.payment.status.toUpperCase()})</p>
-      <p><strong>Expected Delivery:</strong> On or before ${formattedDate}</p>
+    <div style="clear: both; margin-top: 30px;">
+      <h3 style="color: #8b1a1a; margin-bottom: 8px;">Shipping Address</h3>
+      <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #555;">
+        <strong>${order.shippingAddress?.name || ''}</strong><br>
+        ${order.shippingAddress?.line1 || ''}<br>
+        ${order.shippingAddress?.line2 ? `${order.shippingAddress.line2}<br>` : ''}
+        ${order.shippingAddress?.city || ''}, ${order.shippingAddress?.state || ''} - ${order.shippingAddress?.pincode || ''}<br>
+        Phone: ${order.shippingAddress?.phone || ''}
+      </p>
     </div>
     
-    <div style="text-align: center; margin-top: 20px;">
-      <a href="${appUrl}/account?tab=orders" class="button">Track Order Status</a>
+    <div class="text-center" style="margin-top: 30px;">
+      <a href="${appUrl}/account?tab=orders" class="button">Track Order</a>
+      <a href="${appUrl}/shop" class="button button-secondary">Continue Shopping</a>
     </div>
-  `, 'Order Confirmation');
+  `, 'Order Placed Successfully');
 
-  let customerEmail = order.shippingAddress?.email;
-  if (!customerEmail && order.user !== 'guest') {
-    try {
-      const userDoc = await User.findOne({ id: order.user });
-      if (userDoc) customerEmail = userDoc.email;
-    } catch(e) {}
-  }
+  sendAsync({ to: email, subject: 'Your Order has been Placed Successfully 🎉', html, type: 'order_placed' });
+}
+
+// ─── 3. Order Confirmed Email ────────────────────────────────────────────────
+export async function sendOrderConfirmedEmail(order) {
+  const email = await resolveCustomerEmail(order);
+  if (!email) return;
+
+  const dispatchDate = new Date();
+  dispatchDate.setDate(dispatchDate.getDate() + 2);
+  const deliveryDate = new Date();
+  deliveryDate.setDate(deliveryDate.getDate() + 5);
+
+  const html = getLayout(`
+    <h2>Your Order is Confirmed ✅</h2>
+    <p>Hello ${order.shippingAddress?.name || 'Customer'},</p>
+    <p>Great news! Your order <strong>${order.orderId}</strong> has been confirmed and our boutique team has started preparing it.</p>
+    <p>We'll notify you again once it has been packed and shipped.</p>
+    
+    <div class="summary-box">
+      <strong>Estimated Dispatch Date:</strong> ${formatDate(dispatchDate)}<br><br>
+      <strong>Estimated Delivery Date:</strong> ${formatDate(deliveryDate)}
+    </div>
+    
+    <div class="text-center">
+      <a href="${appUrl}/account?tab=orders" class="button">Track My Order</a>
+    </div>
+  `, 'Order Confirmed');
+
+  sendAsync({ to: email, subject: 'Your Order is Confirmed ✅', html, type: 'order_confirmed' });
+}
+
+// ─── 4. Order Packed / Ready to Dispatch Email ───────────────────────────────
+export async function sendOrderPackedEmail(order) {
+  const email = await resolveCustomerEmail(order);
+  if (!email) return;
+
+  const html = getLayout(`
+    <h2>Your Order is Packed 📦</h2>
+    <p>Dear ${order.shippingAddress?.name || 'Customer'},</p>
+    <p>Your order <strong>${order.orderId}</strong> has been carefully packed and is ready for dispatch.</p>
+    <p>Our logistics partner will pick it up shortly.</p>
+    
+    <div class="summary-box">
+      <strong>Order Summary:</strong> ${(order.items || []).length} item(s) - ${formatCurrency(order.pricing?.total || 0)}<br><br>
+      <strong>Estimated Dispatch Time:</strong> Within 24 hours
+    </div>
+    
+    <div class="text-center">
+      <a href="${appUrl}/account?tab=orders" class="button">Track Order</a>
+    </div>
+  `, 'Order Packed');
+
+  sendAsync({ to: email, subject: 'Your Order is Packed 📦', html, type: 'order_packed' });
+}
+
+// ─── 5. Order Shipped Email ──────────────────────────────────────────────────
+export async function sendOrderShippedEmail(order) {
+  const email = await resolveCustomerEmail(order);
+  if (!email) return;
+
+  const courier = order.tracking?.courierName || 'Our Delivery Partner';
+  const trackingNo = order.tracking?.trackingNumber || 'Awaiting Tracking ID';
+  const trackingUrl = order.tracking?.trackingUrl || `https://www.google.com/search?q=${trackingNo}`;
+  const deliveryDate = new Date();
+  deliveryDate.setDate(deliveryDate.getDate() + 3);
+
+  const html = getLayout(`
+    <h2>Your Order has been Shipped 🚚</h2>
+    <p>Dear ${order.shippingAddress?.name || 'Customer'},</p>
+    <p>Good news! Your order <strong>${order.orderId}</strong> is on its way.</p>
+    
+    <div class="summary-box">
+      <p style="margin: 0 0 10px 0;"><strong>Courier Name:</strong> ${courier}</p>
+      <p style="margin: 0 0 10px 0;"><strong>Tracking Number:</strong> ${trackingNo}</p>
+      <p style="margin: 0;"><strong>Expected Delivery Date:</strong> ${formatDate(deliveryDate)}</p>
+    </div>
+    
+    <div class="text-center">
+      <a href="${trackingUrl}" class="button">Track Shipment</a>
+      <a href="${appUrl}/account?tab=orders" class="button button-secondary">View Order</a>
+    </div>
+  `, 'Order Shipped');
+
+  sendAsync({ to: email, subject: 'Your Order has been Shipped 🚚', html, type: 'order_shipped' });
+}
+
+// ─── 6. Out For Delivery Email ───────────────────────────────────────────────
+export async function sendOutForDeliveryEmail(order) {
+  const email = await resolveCustomerEmail(order);
+  if (!email) return;
+
+  const courier = order.tracking?.courierName || 'Our Delivery Partner';
+  const trackingNo = order.tracking?.trackingNumber || 'N/A';
+
+  const html = getLayout(`
+    <h2>Your Order is Out for Delivery 🚀</h2>
+    <p>Dear ${order.shippingAddress?.name || 'Customer'},</p>
+    <p>Your package is arriving today. Please keep your phone available as our delivery executive might call you.</p>
+    
+    <div class="summary-box">
+      <p style="margin: 0 0 10px 0;"><strong>Courier:</strong> ${courier}</p>
+      <p style="margin: 0 0 10px 0;"><strong>Tracking Number:</strong> ${trackingNo}</p>
+      <hr style="border: 0; border-top: 1px solid #e8dfd5; margin: 15px 0;">
+      <p style="margin: 0 0 5px 0;"><strong>Delivery Address:</strong></p>
+      <p style="margin: 0; font-size: 13px; color: #555;">
+        ${order.shippingAddress?.line1 || ''}, ${order.shippingAddress?.city || ''}<br>
+        ${order.shippingAddress?.state || ''} - ${order.shippingAddress?.pincode || ''}
+      </p>
+    </div>
+    
+    <div class="text-center">
+      <a href="${order.tracking?.trackingUrl || appUrl}" class="button">Track Live</a>
+    </div>
+  `, 'Out For Delivery');
+
+  sendAsync({ to: email, subject: 'Your Order is Out for Delivery 🚀', html, type: 'out_for_delivery' });
+}
+
+// ─── 7. Order Delivered Email ────────────────────────────────────────────────
+export async function sendOrderDeliveredEmail(order) {
+  const email = await resolveCustomerEmail(order);
+  if (!email) return;
+
+  const html = getLayout(`
+    <h2>Your Order has been Delivered ❤️</h2>
+    <p>Dear ${order.shippingAddress?.name || 'Customer'},</p>
+    <p>Thank you so much for shopping with Swastika Sarees. We hope you love your purchase as much as we loved crafting it for you.</p>
+    <p>Your feedback means the world to us and helps other shoppers make great choices. We would love to hear your thoughts!</p>
+    
+    <div class="text-center">
+      <a href="${appUrl}/account?tab=orders" class="button">Write Review</a>
+      <a href="${appUrl}/shop" class="button button-secondary">Shop Again</a>
+    </div>
+  `, 'Order Delivered');
+
+  sendAsync({ to: email, subject: 'Your Order has been Delivered ❤️', html, type: 'order_delivered' });
+}
+
+// ─── 8. Order Cancelled Email ────────────────────────────────────────────────
+export async function sendOrderCancelledEmail(order, reason = 'Customer request') {
+  const email = await resolveCustomerEmail(order);
+  if (!email) return;
   
-  if (customerEmail) {
-    sendAsync({
-      to: customerEmail,
-      subject: `Order Confirmation - ${order.orderId}`,
-      html,
-      type: 'order_confirmation'
-    });
-  } else {
-    // If order was submitted by logged-in user, fetch email from MongoDB
-    User.findOne({ id: order.user }).then(u => {
-      if (u && u.email) {
-        sendAsync({
-          to: u.email,
-          subject: `Order Confirmation - ${order.orderId}`,
-          html,
-          type: 'order_confirmation'
-        });
-      }
-    }).catch(() => {});
-  }
-}
-
-export async function sendPaymentSuccessfulEmail(order) {
-  const html = getLayout(`
-    <h2>Payment Captured Successfully</h2>
-    <p>We have successfully verified your payment for order <strong>${order.orderId}</strong>.</p>
-    <div style="background-color: #fff8f0; border-left: 4px solid #D4AF37; padding: 16px; margin: 20px 0; font-size: 13px;">
-      <div><strong>Transaction ID:</strong> ${order.payment.transactionId}</div>
-      <div><strong>Amount Verified:</strong> ₹${(order.pricing.total / 100).toFixed(2)}</div>
-      <div><strong>Payment Method:</strong> ${order.payment.method.toUpperCase()}</div>
-      <div><strong>Payment Status:</strong> PAID</div>
-    </div>
-    <div style="text-align: center;">
-      <a href="${appUrl}/api/orders/${order.orderId}/invoice" class="button">Download Invoice Receipt</a>
-    </div>
-  `, 'Payment Successful');
-
-  const resolveRecipientAndSend = (to) => {
-    sendAsync({
-      to,
-      subject: `Payment Successful - ${order.orderId}`,
-      html,
-      type: 'payment_successful'
-    });
-  };
-
-  const directEmail = order.shippingAddress?.email;
-  if (directEmail) {
-    resolveRecipientAndSend(directEmail);
-  } else {
-    User.findOne({ id: order.user }).then(u => {
-      if (u && u.email) resolveRecipientAndSend(u.email);
-    }).catch(() => {});
-  }
-}
-
-export function sendOrderStatusEmail(order, status) {
-  let statusTitle = '';
-  let statusDesc = '';
-  let ctaText = 'View Order Details';
-  let ctaLink = `${appUrl}/account?tab=orders`;
-
-  const cleanStatus = (status || '').toLowerCase();
-
-  if (cleanStatus === 'confirmed') {
-    statusTitle = 'Your Order Has Been Confirmed!';
-    statusDesc = 'Our boutique has verified your order. Items are queued for packaging and tailor check.';
-  } else if (cleanStatus === 'processing') {
-    statusTitle = 'Your Order is Now Processing';
-    statusDesc = 'We are curating and preparing your ethnic wear designs. Each saree is individually checked for stitching details.';
-  } else if (cleanStatus === 'packed') {
-    statusTitle = 'Order Packed and Sealed';
-    statusDesc = 'Your items have been safely packed in our boutique boxes and are ready to be dispatched.';
-  } else if (cleanStatus === 'shipped') {
-    const courier = order.tracking?.courierName || 'Delhivery';
-    const trackingNo = order.tracking?.trackingNumber || 'N/A';
-    statusTitle = 'Order Dispatched & Shipped!';
-    statusDesc = `Your Swastika Sarees parcel has been handed over to courier partner: <strong>${courier}</strong>. Tracking Number: <strong>${trackingNo}</strong>.`;
-    ctaText = 'Track Shipment Link';
-    ctaLink = order.tracking?.trackingUrl || `https://www.delhivery.com/track/package/${trackingNo}`;
-  } else if (cleanStatus === 'out_for_delivery' || cleanStatus === 'out for delivery') {
-    statusTitle = 'Order Out For Delivery';
-    statusDesc = 'Our delivery courier partner is in your area and will contact you shortly to deliver your premium box.';
-  } else if (cleanStatus === 'delivered') {
-    statusTitle = 'Order Delivered! Enjoy Your Sparkle';
-    statusDesc = 'Your Swastika Sarees box was successfully delivered. We hope you love the handcrafted designs!';
-    ctaText = 'Rate & Review Products';
-    ctaLink = `${appUrl}/account?tab=reviews`;
-  } else {
-    // General fallback
-    statusTitle = `Order Status: ${status.toUpperCase()}`;
-    statusDesc = `Your Swastika Sarees order status was updated to ${status}.`;
-  }
+  const isPaid = order.payment?.status === 'paid' || order.payment?.status === 'refund_pending' || order.payment?.status === 'refunded';
 
   const html = getLayout(`
-    <h2>${statusTitle}</h2>
-    <p>Dear ${order.shippingAddress.name},</p>
-    <p>${statusDesc}</p>
-    <div style="background-color: #fff8f0; border: 1px dashed #e8dfd5; padding: 16px; margin: 20px 0; font-size: 13px;">
-      <div><strong>Order ID:</strong> ${order.orderId}</div>
-      <div><strong>Current Status:</strong> <span style="color: #8b1a1a; font-weight: bold; text-transform: uppercase;">${cleanStatus}</span></div>
-      ${order.tracking?.trackingNumber ? `<div><strong>Tracking Number:</strong> ${order.tracking.trackingNumber}</div>` : ''}
-    </div>
-    <div style="text-align: center;">
-      <a href="${ctaLink}" class="button">${ctaText}</a>
-    </div>
-  `, `Order Status Update: ${cleanStatus}`);
-
-  const recipient = order.shippingAddress?.email;
-  if (recipient) {
-    sendAsync({
-      to: recipient,
-      subject: `Order Update - ${order.orderId} [${cleanStatus.toUpperCase()}]`,
-      html,
-      type: `status_${cleanStatus}`
-    });
-  } else {
-    User.findOne({ id: order.user }).then(u => {
-      if (u && u.email) {
-        sendAsync({
-          to: u.email,
-          subject: `Order Update - ${order.orderId} [${cleanStatus.toUpperCase()}]`,
-          html,
-          type: `status_${cleanStatus}`
-        });
-      }
-    }).catch(() => {});
-  }
-}
-
-export function sendOrderCancelledEmail(order, reason = 'Cancelled by customer') {
-  const html = getLayout(`
-    <h2>Order Cancelled</h2>
+    <h2>Your Order has been Cancelled</h2>
+    <p>Dear ${order.shippingAddress?.name || 'Customer'},</p>
     <p>Your order <strong>${order.orderId}</strong> has been cancelled.</p>
-    <div style="background-color: #fff8f0; border-left: 4px solid #8b1a1a; padding: 16px; margin: 20px 0; font-size: 13px;">
-      <div><strong>Cancellation Reason:</strong> ${reason}</div>
-      <div><strong>Refund Status:</strong> ${order.payment.status === 'paid' ? 'Refund Initiated' : 'No Payment Deducted'}</div>
-      <div><strong>Amount:</strong> ₹${(order.pricing.total / 100).toFixed(2)}</div>
+    
+    <div class="summary-box">
+      <p style="margin: 0 0 10px 0;"><strong>Reason:</strong> ${reason}</p>
+      <p style="margin: 0 0 10px 0;"><strong>Refund Status:</strong> <span class="badge">${isPaid ? 'Refund Initiated' : 'No Payment Deducted'}</span></p>
+      ${isPaid ? \`<p style="margin: 0;"><strong>Expected Refund Time:</strong> 5-7 Business Days</p>\` : ''}
     </div>
-    <p>If payment was already completed, the refund will be credited back to your original source of payment or wallet within 2-3 business days.</p>
+    
+    <div class="text-center">
+      <a href="${appUrl}/contact" class="button">Contact Support</a>
+    </div>
   `, 'Order Cancelled');
 
-  const directEmail = order.shippingAddress?.email;
-  if (directEmail) {
-    sendAsync({ to: directEmail, subject: `Order Cancelled - ${order.orderId}`, html, type: 'order_cancelled' });
-  } else {
-    User.findOne({ id: order.user }).then(u => {
-      if (u && u.email) sendAsync({ to: u.email, subject: `Order Cancelled - ${order.orderId}`, html, type: 'order_cancelled' });
-    }).catch(() => {});
-  }
+  sendAsync({ to: email, subject: 'Your Order has been Cancelled', html, type: 'order_cancelled' });
 }
 
-export function sendRefundInitiatedEmail(order) {
+// ─── 9. Refund Initiated Email ───────────────────────────────────────────────
+export async function sendRefundInitiatedEmail(order) {
+  const email = await resolveCustomerEmail(order);
+  if (!email) return;
+
   const html = getLayout(`
-    <h2>Refund Initiated</h2>
+    <h2>Refund Initiated 💳</h2>
+    <p>Dear ${order.shippingAddress?.name || 'Customer'},</p>
     <p>A refund has been initiated for your order <strong>${order.orderId}</strong>.</p>
-    <div style="background-color: #fff8f0; border-left: 4px solid #D4AF37; padding: 16px; margin: 20px 0; font-size: 13px;">
-      <div><strong>Refunded Amount:</strong> ₹${(order.pricing.total / 100).toFixed(2)}</div>
-      <div><strong>Transaction Reference:</strong> ${order.payment.transactionId || 'N/A'}</div>
-      <div><strong>Estimated Credits:</strong> 2-3 Business Days</div>
+    
+    <div class="summary-box">
+      <p style="margin: 0 0 10px 0;"><strong>Refund Amount:</strong> ${formatCurrency(order.pricing?.total || 0)}</p>
+      <p style="margin: 0 0 10px 0;"><strong>Refund ID / Reference:</strong> ${order.payment?.transactionId || 'Processing'}</p>
+      <p style="margin: 0;"><strong>Estimated Credit Time:</strong> 5-7 Business Days to original payment source</p>
     </div>
-    <p>Your refund is being processed and will be credited to your original payment source or boutique wallet shortly.</p>
   `, 'Refund Initiated');
 
-  const directEmail = order.shippingAddress?.email;
-  if (directEmail) {
-    sendAsync({ to: directEmail, subject: `Refund Processed - ${order.orderId}`, html, type: 'refund_initiated' });
-  } else {
-    User.findOne({ id: order.user }).then(u => {
-      if (u && u.email) sendAsync({ to: u.email, subject: `Refund Processed - ${order.orderId}`, html, type: 'refund_initiated' });
-    }).catch(() => {});
-  }
+  sendAsync({ to: email, subject: 'Refund Initiated 💳', html, type: 'refund_initiated' });
 }
 
-export function sendRefundCompletedEmail(order) {
+// ─── 10. Refund Completed Email ──────────────────────────────────────────────
+export async function sendRefundCompletedEmail(order) {
+  const email = await resolveCustomerEmail(order);
+  if (!email) return;
+
   const html = getLayout(`
     <h2>Refund Completed Successfully</h2>
-    <p>The refund for your order <strong>${order.orderId}</strong> has been successfully credited.</p>
-    <div style="background-color: #fff8f0; border-left: 4px solid #15803d; padding: 16px; margin: 20px 0; font-size: 13px;">
-      <div><strong>Refunded Amount:</strong> ₹${(order.pricing.total / 100).toFixed(2)}</div>
-      <div><strong>Status:</strong> COMPLETED & CREDITED</div>
+    <p>Dear ${order.shippingAddress?.name || 'Customer'},</p>
+    <p>We are writing to inform you that your refund has been completely processed and credited successfully.</p>
+    
+    <div class="summary-box">
+      <p style="margin: 0 0 10px 0;"><strong>Refund Amount:</strong> <span style="color: #15803d; font-weight: bold;">${formatCurrency(order.pricing?.total || 0)}</span></p>
+      <p style="margin: 0 0 10px 0;"><strong>Credited To:</strong> Original Payment Source</p>
+      <p style="margin: 0;"><strong>Transaction ID:</strong> ${order.payment?.transactionId || order.orderId}</p>
     </div>
-    <p>Please check your wallet details or bank statement for validation.</p>
+    <p>Please check your bank statement. If you do not see the credit within 24 hours, please contact your bank with the Transaction ID.</p>
   `, 'Refund Completed');
 
-  const directEmail = order.shippingAddress?.email;
-  if (directEmail) {
-    sendAsync({ to: directEmail, subject: `Refund Completed - ${order.orderId}`, html, type: 'refund_completed' });
-  } else {
-    User.findOne({ id: order.user }).then(u => {
-      if (u && u.email) sendAsync({ to: u.email, subject: `Refund Completed - ${order.orderId}`, html, type: 'refund_completed' });
-    }).catch(() => {});
-  }
+  sendAsync({ to: email, subject: 'Refund Completed Successfully', html, type: 'refund_completed' });
 }
 
+// ─── 11. Password Reset Email ────────────────────────────────────────────────
 export function sendPasswordResetEmail(email, resetLink) {
   const html = getLayout(`
-    <h2>Forgot Password Request</h2>
-    <p>A password reset request was initiated for your account. Click the button below to update your password:</p>
-    <div style="text-align: center; margin: 20px 0;">
-      <a href="${resetLink}" class="button">Reset My Password</a>
+    <h2>Reset Your Password</h2>
+    <p>We received a request to reset your password for your Swastika Sarees account.</p>
+    <p>Click the button below to choose a new password. This link will expire in <strong>15 Minutes</strong>.</p>
+    
+    <div class="text-center">
+      <a href="${resetLink}" class="button">Reset Password</a>
     </div>
-    <p style="font-size: 11px; color: #887878;">If you did not make this request, you can safely ignore this email. The link will expire shortly.</p>
-  `, 'Password Reset Request');
+    
+    <p style="font-size: 13px; color: #666; margin-top: 20px;">If you didn't request a password reset, you can safely ignore this email.</p>
+  `, 'Reset Password');
 
-  sendAsync({
-    to: email,
-    subject: 'Password Reset Instructions',
-    html,
-    type: 'password_reset'
-  });
+  sendAsync({ to: email, subject: 'Reset Your Password', html, type: 'password_reset' });
 }
 
+// ─── 12. Email Verification ──────────────────────────────────────────────────
 export function sendEmailVerificationEmail(email, verifyLink) {
   const html = getLayout(`
-    <h2>Verify Your Email</h2>
-    <p>Thank you for signing up at Swastika Sarees. Click the button below to confirm your email address and activate your profile account:</p>
-    <div style="text-align: center; margin: 20px 0;">
-      <a href="${verifyLink}" class="button">Verify Email Address</a>
+    <h2>Verify Your Email Address</h2>
+    <p>Welcome to Swastika Sarees!</p>
+    <p>To complete your registration and secure your account, please verify your email address by clicking the button below.</p>
+    
+    <div class="text-center">
+      <a href="${verifyLink}" class="button">Verify Email</a>
     </div>
-  `, 'Email Verification');
+  `, 'Verify Email');
 
-  sendAsync({
-    to: email,
-    subject: 'Activate Your Account',
-    html,
-    type: 'email_verification'
-  });
+  sendAsync({ to: email, subject: 'Verify Your Email Address', html, type: 'email_verification' });
 }
 
-export function sendOtpEmail(email, otpCode) {
-  const html = getLayout(`
-    <h2>Verification Code</h2>
-    <p>Please enter the following verification One-Time Password (OTP) to complete your transaction or login request:</p>
-    <div style="text-align: center; background-color: #fff8f0; border: 1px dashed #D4AF37; padding: 20px; margin: 20px 0;">
-      <span style="font-size: 32px; font-weight: bold; letter-spacing: 0.25em; color: #8b1a1a; font-family: monospace;">${otpCode}</span>
-    </div>
-    <p style="font-size: 11px; color: #887878;">This code is valid for 10 minutes. Do not share this OTP with anyone.</p>
-  `, 'Your Verification Code');
-
-  sendAsync({
-    to: email,
-    subject: `Your OTP Code: ${otpCode}`,
-    html,
-    type: 'otp_email'
-  });
-}
-
-// ----------------------------------------------------------------------
-// ADMIN NOTIFICATION TEMPLATES
-// ----------------------------------------------------------------------
-
+// ─── 13. Admin New Order Email ───────────────────────────────────────────────
 export function sendAdminNewOrder(order) {
+  const itemsHtml = (order.items || []).map(item => `
+    <li>${item.quantity}x ${item.name} (${item.color || ''} ${item.size || ''})</li>
+  `).join('');
+
   const html = getLayout(`
-    <h2 style="color: #b91c1c;">New Storefront Order Received!</h2>
-    <p>Order <strong>${order.orderId}</strong> was placed by customer.</p>
-    <div style="background-color: #fff8f0; border-left: 4px solid #8b1a1a; padding: 16px; margin: 20px 0; font-size: 13px;">
-      <div><strong>Customer Name:</strong> ${order.shippingAddress.name}</div>
-      <div><strong>Contact Number:</strong> ${order.shippingAddress.phone}</div>
-      <div><strong>Grand Total:</strong> ₹${(order.pricing.total / 100).toFixed(2)}</div>
-      <div><strong>Payment Method:</strong> ${order.payment.method.toUpperCase()}</div>
+    <h2>New Order Received - #${order.orderId}</h2>
+    <p>A new order has been placed on the storefront.</p>
+    
+    <div class="summary-box">
+      <strong>Customer:</strong> ${order.shippingAddress?.name || 'N/A'}<br>
+      <strong>Email:</strong> ${order.shippingAddress?.email || 'N/A'}<br>
+      <strong>Phone:</strong> ${order.shippingAddress?.phone || 'N/A'}<br>
+      <strong>Address:</strong> ${order.shippingAddress?.city || ''}, ${order.shippingAddress?.state || ''} - ${order.shippingAddress?.pincode || ''}<br><br>
+      
+      <strong>Items:</strong>
+      <ul style="margin-top: 5px; margin-bottom: 10px;">${itemsHtml}</ul>
+      
+      <strong>Grand Total:</strong> ${formatCurrency(order.pricing?.total || 0)}<br>
+      <strong>Payment Method:</strong> ${order.payment?.method?.toUpperCase() || 'N/A'}<br>
+      <strong>Payment Status:</strong> <span class="badge">${order.payment?.status || 'N/A'}</span>
     </div>
-    <div style="text-align: center;">
+    
+    <div class="text-center">
       <a href="${appUrl}/admin" class="button">Open Admin Dashboard</a>
+      <a href="${appUrl}/api/orders/${order.orderId}/invoice" class="button button-secondary">Print Invoice</a>
     </div>
-  `, 'New Storefront Order');
+  `, `New Order #${order.orderId}`);
 
-  sendAsync({ to: adminEmail, subject: `ALERT: New Order ${order.orderId}`, html, type: 'admin_new_order' });
+  sendAsync({ to: adminEmail, subject: `New Order Received - #${order.orderId}`, html, type: 'admin_new_order' });
 }
 
-export function sendAdminNewCustomer(user) {
+// ─── 14. Low Stock Alert ─────────────────────────────────────────────────────
+export function sendAdminLowStockAlert(product, variantInfo = 'Main Product', remainingStock = 0) {
   const html = getLayout(`
-    <h2 style="color: #b91c1c;">New Customer Signed Up!</h2>
-    <p>A new customer has created an account on the storefront.</p>
-    <div style="background-color: #fff8f0; border-left: 4px solid #8b1a1a; padding: 16px; margin: 20px 0; font-size: 13px;">
-      <div><strong>Customer Name:</strong> ${user.fullName || 'Valued User'}</div>
-      <div><strong>Email:</strong> ${user.email}</div>
-      <div><strong>Phone:</strong> ${user.phone || 'N/A'}</div>
-      <div><strong>Registered At:</strong> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</div>
+    <h2 style="color: #b91c1c;">Low Stock Alert ⚠️</h2>
+    <p>Action required: A product's inventory has fallen below the minimum threshold (5 units).</p>
+    
+    <div class="summary-box">
+      <strong>Product:</strong> ${product?.name || 'Unknown'}<br>
+      <strong>Variant:</strong> ${variantInfo}<br>
+      <strong>Remaining Stock:</strong> <span style="color: #b91c1c; font-weight: bold; font-size: 18px;">${remainingStock}</span>
     </div>
-  `, 'New Customer Registered');
-
-  sendAsync({ to: adminEmail, subject: `ALERT: New Customer - ${user.email}`, html, type: 'admin_new_customer' });
-}
-
-export function sendAdminLargeOrder(order) {
-  const html = getLayout(`
-    <h2 style="color: #b91c1c;">⚠️ ATTENTION REQUIRED: Large Order Received</h2>
-    <p>Order <strong>${order.orderId}</strong> contains a high transaction value exceeding ₹20,000.</p>
-    <div style="background-color: #fff8f0; border: 2px solid #b91c1c; padding: 16px; margin: 20px 0; font-size: 13px;">
-      <div><strong>Customer Name:</strong> ${order.shippingAddress.name}</div>
-      <div><strong>Order Total Value:</strong> ₹${(order.pricing.total / 100).toFixed(2)}</div>
-      <div><strong>Address:</strong> ${order.shippingAddress.line1}, ${order.shippingAddress.city}</div>
-      <div><strong>Phone:</strong> ${order.shippingAddress.phone}</div>
-    </div>
-    <p>We recommend verifying shipping coordinates or consulting directly via WhatsApp call before shipping high-value Banarasi silk orders.</p>
-  `, 'Large Order Received');
-
-  sendAsync({ to: adminEmail, subject: `URGENT: High Value Order ${order.orderId}`, html, type: 'admin_large_order' });
-}
-
-export function sendAdminPaymentFailure(order, errDetails) {
-  const html = getLayout(`
-    <h2 style="color: #b91c1c;">⚠️ ALERT: Order Payment Attempt Failed</h2>
-    <p>An attempt to pay for order <strong>${order.orderId}</strong> failed signature checkout validation.</p>
-    <div style="background-color: #fff8f0; border-left: 4px solid #b91c1c; padding: 16px; margin: 20px 0; font-size: 13px;">
-      <div><strong>Customer:</strong> ${order.shippingAddress.name}</div>
-      <div><strong>Payment Error Details:</strong> ${errDetails || 'Signature mismatch or user abort'}</div>
-      <div><strong>Deducted Attempt:</strong> ₹${(order.pricing.total / 100).toFixed(2)}</div>
-    </div>
-  `, 'Payment Failed Alert');
-
-  sendAsync({ to: adminEmail, subject: `ALERT: Payment Failure - ${order.orderId}`, html, type: 'admin_payment_failure' });
-}
-
-export function sendAdminRefundRequest(order, refundDetails = 'Return requested') {
-  const html = getLayout(`
-    <h2 style="color: #b91c1c;">⚠️ Refund Request Received</h2>
-    <p>Customer has requested a return/refund for order <strong>${order.orderId}</strong>.</p>
-    <div style="background-color: #fff8f0; border-left: 4px solid #8b1a1a; padding: 16px; margin: 20px 0; font-size: 13px;">
-      <div><strong>Customer Name:</strong> ${order.shippingAddress.name}</div>
-      <div><strong>Order Value:</strong> ₹${(order.pricing.total / 100).toFixed(2)}</div>
-      <div><strong>Return notes:</strong> ${refundDetails}</div>
-    </div>
-  `, 'Refund Request Received');
-
-  sendAsync({ to: adminEmail, subject: `ALERT: Return Request - ${order.orderId}`, html, type: 'admin_refund_request' });
-}
-
-export function sendAdminLowStock(product, variantInfo = 'Main product') {
-  const html = getLayout(`
-    <h2 style="color: #b91c1c;">⚠️ Stock Alert: Low Inventory</h2>
-    <p>Product stock levels have fallen below thresholds.</p>
-    <div style="background-color: #fff8f0; border-left: 4px solid #8b1a1a; padding: 16px; margin: 20px 0; font-size: 13px;">
-      <div><strong>Product Name:</strong> ${product.name}</div>
-      <div><strong>Variant/Size Info:</strong> ${variantInfo}</div>
-      <div><strong>Stock Remaining:</strong> ${product.stock}</div>
+    
+    <div class="text-center">
+      <a href="${appUrl}/admin/products" class="button">Manage Inventory</a>
     </div>
   `, 'Low Stock Alert');
 
-  sendAsync({ to: adminEmail, subject: `ALERT: Low Stock - ${product.name}`, html, type: 'admin_low_stock' });
+  sendAsync({ to: adminEmail, subject: 'Low Stock Alert', html, type: 'admin_low_stock' });
 }
 
-// ----------------------------------------------------------------------
-// MARKETING & CAMPAIGN TEMPLATES (REUSABLE LAYOUT PARAMETERS)
-// ----------------------------------------------------------------------
-
-export function sendMarketingEmail(campaignType, toEmail) {
-  let title = '';
-  let headline = '';
-  let content = '';
-  let btnText = 'Shop the Collection';
-  let btnLink = `${appUrl}/shop`;
-
-  const campaign = (campaignType || '').toLowerCase();
-
-  if (campaign === 'festival') {
-    title = 'Celebrate Festive Season';
-    headline = '🌟 Festive Silk Sarees Festival - Up to 40% OFF!';
-    content = 'Celebrate the upcoming festivities with our exclusive Banarasi handwoven silk sarees. Intricate gold zari borders, vibrant color themes, and luxury boutique finishes.';
-    btnText = 'Shop Festive Silk';
-  } else if (campaign === 'flash') {
-    title = 'Flash Sale Alert';
-    headline = '⚡ FLASH SALE: Next 24 Hours Only!';
-    content = 'Get flat 15% off on our entire Georgette Kurti and Dress materials catalogs. Use promo code <strong>FLASH15</strong> during checkout.';
-    btnText = 'Claim 15% Discount';
-  } else if (campaign === 'new_collection') {
-    title = 'New Weaves Arrived';
-    headline = '🌿 Unveiling the Bridal Banarasi Silk Collection';
-    content = 'Witness heritage patterns woven by master weavers. New collection arrivals feature delicate gold threads and soft royal borders.';
-    btnText = 'Explore Bridal Weaves';
-  } else if (campaign === 'abandoned_cart') {
-    title = 'Forgot items in bag?';
-    headline = '🛒 We saved the items in your shopping bag!';
-    content = 'You forgot some gorgeous handpicked ethnic designs in your shopping bag. Complete your purchase now and enjoy free shipping across India.';
-    btnText = 'Checkout My Bag';
-    btnLink = `${appUrl}/cart`;
-  } else if (campaign === 'wishlist_reminder') {
-    title = 'Wishlist items available';
-    headline = '❤️ Price Drop Alert: Your Wishlist Items!';
-    content = 'Great news! Handpicked designs in your wishlist have received a temporary markdown. Log in and buy before stock runs out.';
-    btnText = 'Open My Wishlist';
-    btnLink = `${appUrl}/account?tab=wishlist`;
-  } else if (campaign === 'birthday') {
-    title = 'Happy Birthday Offer';
-    headline = '🎂 Happy Birthday from Swastika Sarees!';
-    content = 'Celebrate your birthday in style! As a token of appreciation, enjoy flat 10% cashback directly to your wallet using voucher code <strong>BDAYVIBE</strong>.';
-    btnText = 'Claim Birthday Cash';
-  } else {
-    // General Newsletter Fallback
-    title = 'Boutique Newsletter Update';
-    headline = '📰 Latest Weaving Highlights & Stylist Tips';
-    content = 'Read our weekly curation detailing how to preserve Banarasi silk weaves, style chiffon drapes, and choose lightweight cotton kurtis for summer elegance.';
-    btnText = 'Read Our Boutique Blog';
-  }
+// ─── 15. Daily Sales Report ──────────────────────────────────────────────────
+export function sendDailySalesReport(reportData) {
+  const topProductsHtml = (reportData.topProducts || []).map(p => `<li>${p.name} - ${p.sales} sold</li>`).join('');
+  const lowStockHtml = (reportData.lowStockProducts || []).map(p => `<li>${p.name} (${p.stock} left)</li>`).join('');
 
   const html = getLayout(`
-    <h2>${headline}</h2>
-    <p>${content}</p>
-    <div style="text-align: center;">
-      <a href="${btnLink}" class="button">${btnText}</a>
+    <h2>Daily Sales Report 📊</h2>
+    <p>Here is the summary of today's business performance (Midnight to 11:59 PM).</p>
+    
+    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+      <div class="summary-box" style="flex: 1; text-align: center; padding: 15px; margin: 0;">
+        <div style="font-size: 12px; color: #666; text-transform: uppercase;">Revenue</div>
+        <div style="font-size: 24px; font-weight: bold; color: #8B1A1A;">${formatCurrency(reportData.revenue || 0)}</div>
+      </div>
+      <div class="summary-box" style="flex: 1; text-align: center; padding: 15px; margin: 0;">
+        <div style="font-size: 12px; color: #666; text-transform: uppercase;">Orders</div>
+        <div style="font-size: 24px; font-weight: bold; color: #8B1A1A;">${reportData.totalOrders || 0}</div>
+      </div>
     </div>
-    <p style="font-size: 11px; color: #887878; text-align: center;">You are receiving this email because you subscribed to marketing updates at Swastika Sarees. You can unsubscribe at any time.</p>
-  `, title);
+    
+    <div class="summary-box">
+      <h3 style="margin-top: 0;">Order Breakdown</h3>
+      <p style="margin: 5px 0;"><strong>Online Payments:</strong> ${reportData.onlineOrders || 0}</p>
+      <p style="margin: 5px 0;"><strong>Cash on Delivery:</strong> ${reportData.codOrders || 0}</p>
+      <p style="margin: 5px 0; color: #b91c1c;"><strong>Cancelled Orders:</strong> ${reportData.cancelledOrders || 0}</p>
+      <p style="margin: 5px 0; color: #C8832A;"><strong>Pending Dispatch:</strong> ${reportData.pendingOrders || 0}</p>
+    </div>
+    
+    ${topProductsHtml ? `
+    <div class="summary-box">
+      <h3 style="margin-top: 0;">Top Selling Products</h3>
+      <ul style="margin: 0; padding-left: 20px;">${topProductsHtml}</ul>
+    </div>` : ''}
+    
+    ${lowStockHtml ? `
+    <div class="summary-box" style="border-left: 4px solid #b91c1c;">
+      <h3 style="margin-top: 0; color: #b91c1c;">Action Needed: Low Stock</h3>
+      <ul style="margin: 0; padding-left: 20px;">${lowStockHtml}</ul>
+    </div>` : ''}
+    
+    <div class="text-center">
+      <a href="${appUrl}/admin" class="button">View Dashboard</a>
+    </div>
+  `, 'Daily Sales Report');
 
-  sendAsync({
-    to: toEmail,
-    subject: title,
-    html,
-    type: `marketing_${campaign}`
-  });
+  sendAsync({ to: adminEmail, subject: \`Daily Sales Report - \${new Date().toLocaleDateString('en-IN')}\`, html, type: 'daily_report' });
 }
+
+// ─── LEGACY EXPORTS (Kept for compatibility with other files) ────────────────
+export function sendAdminNewCustomer(user) { sendWelcomeEmail(user); }
+export function sendAdminLargeOrder(order) {}
+export function sendAdminPaymentFailure(order, errDetails) {}
+export function sendAdminRefundRequest(order, details) {}
+export function sendOtpEmail(email, code) { sendEmailVerificationEmail(email, \`\${appUrl}/verify-email?code=\${code}\`); }
+export function sendOrderStatusEmail(order, status) {
+  if (status === 'confirmed') return sendOrderConfirmedEmail(order);
+  if (status === 'packed') return sendOrderPackedEmail(order);
+  if (status === 'shipped') return sendOrderShippedEmail(order);
+  if (status === 'out_for_delivery') return sendOutForDeliveryEmail(order);
+  if (status === 'delivered') return sendOrderDeliveredEmail(order);
+}
+export function sendPaymentSuccessfulEmail(order) { return sendOrderPlacedEmail(order); }

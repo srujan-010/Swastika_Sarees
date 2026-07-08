@@ -20,6 +20,7 @@ import authRouter from './routes/auth.js';
 import { requireAuth } from './middleware/auth.js';
 import emailTestRouter from './routes/emailTest.js';
 import { User, Order, Product, Lead } from './db/models.js';
+import { initializeCronJobs } from './cron/dailyReport.js';
 
 const app = express();
 
@@ -468,6 +469,9 @@ app.use(express.static(path.join(__dirname, "../dist")));
 app.get("*", (req, res) => {
     res.sendFile(path.join(__dirname, "../dist/index.html"));
 });
+
+// Initialize scheduled cron jobs
+initializeCronJobs();
 
 // Start Express server
 const PORT = process.env.PORT || 5005;
