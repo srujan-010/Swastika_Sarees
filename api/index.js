@@ -1,5 +1,10 @@
 import express from 'express';
 import cors from 'cors';
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { connectDB } from './db/db.js';
 import categoriesRouter from './routes/categories.js';
 import productsRouter from './routes/products.js';
@@ -457,6 +462,12 @@ app.use('/api/orders', ordersRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/popup', popupRouter);
 app.use('/api/email-test', emailTestRouter);
+
+app.use(express.static(path.join(__dirname, "../dist")));
+
+app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "../dist/index.html"));
+});
 
 // Start Express server
 const PORT = process.env.PORT || 5005;
