@@ -12,6 +12,22 @@ export const useCartStore = create((set, get) => ({
     localStorage.setItem('swastika_cart', JSON.stringify(cart));
   },
 
+  fetchSettings: async () => {
+    try {
+      const response = await fetch('/api/settings');
+      if (response.ok) {
+        const data = await response.json();
+        set({
+          shippingThreshold: data.freeShippingThreshold !== undefined ? data.freeShippingThreshold / 100 : 999,
+          shippingRate: data.flatShippingRate !== undefined ? data.flatShippingRate / 100 : 100,
+          codRate: data.codExtraCharge !== undefined ? data.codExtraCharge / 100 : 50
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch settings in cartStore:', error);
+    }
+  },
+
   addItem: (item) => {
     const { cart } = get();
     const existingIndex = cart.findIndex(

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, ShoppingBag, CreditCard, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Truck, ShoppingBag, CreditCard, CheckCircle2, AlertTriangle, ShieldCheck, Percent } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,10 +12,21 @@ const INDIAN_STATES = [
   "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh",
   "Uttarakhand", "West Bengal", "Delhi", "Jammu and Kashmir", "Puducherry", "Ladakh"
 ];
-
 export default function Checkout() {
   const navigate = useNavigate();
-  const { cart, appliedCoupon, getSubtotal, getCouponDiscount, getShippingCharge, getTotal, clearCart } = useCartStore();
+  const { 
+    cart, 
+    appliedCoupon, 
+    couponError,
+    applyCoupon,
+    removeCoupon,
+    getSubtotal, 
+    getCouponDiscount, 
+    getShippingCharge, 
+    getTotal, 
+    clearCart,
+    fetchSettings
+  } = useCartStore();
   const { user, token, loading, addAddress } = useAuthStore();
 
   const [step, setStep] = useState(1);
@@ -51,9 +62,25 @@ export default function Checkout() {
   const [paymentMethod, setPaymentMethod] = useState('razorpay'); // 'razorpay' | 'cod'
   const [processingOrder, setProcessingOrder] = useState(false);
   const [orderError, setOrderError] = useState('');
+  const isSuccessRef = useRef(false);
+
+  // Coupon State
+  const [couponCode, setCouponCode] = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
+
+  const handleCouponSubmit = async (e) => {
+    e.preventDefault();
+    if (!couponCode.trim()) return;
+
+    setCouponLoading(true);
+    await applyCoupon(couponCode.trim());
+    setCouponLoading(false);
+  };
 
   // Load configuration settings
   useEffect(() => {
+    fetchSettings();
+
     fetch('/api/settings')
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -63,7 +90,7 @@ export default function Checkout() {
       .catch(err => console.error('Failed to load settings:', err));
 
     // Redirect to home if cart is empty
-    if (cart.length === 0) {
+    if (cart.length === 0 && !isSuccessRef.current) {
       navigate('/cart');
       return;
     }
@@ -247,6 +274,7 @@ export default function Checkout() {
 
         const data = await response.json();
         if (response.ok) {
+          isSuccessRef.current = true;
           clearCart();
           navigate(`/order-success/${data.orderId}`);
         } else {
@@ -297,20 +325,21 @@ export default function Checkout() {
                 couponApplied: appliedCoupon?.code || null,
                 paymentMethod: 'razorpay',
                 razorpayOrderId: orderData.id,
-                razorpayPaymentId: `pay_mock_${crypto.randomUUID().slice(0, 12)}`,
+                razorpayPaymentId: `pay_mock_${Math.random().toString(36).substring(2, 14)}`,
                 userId: user?.id || null
               })
             });
 
             const dbData = await response.json();
             if (response.ok) {
+              isSuccessRef.current = true;
               clearCart();
               navigate(`/order-success/${dbData.orderId}`);
             } else {
               throw new Error(dbData.error || 'Database submission failed');
             }
           } catch (err) {
-            setOrderError(err.message);
+            navigate('/order-payment-failed');
           } finally {
             setProcessingOrder(false);
           }
@@ -358,13 +387,14 @@ export default function Checkout() {
 
               const dbData = await response.json();
               if (response.ok) {
+                isSuccessRef.current = true;
                 clearCart();
                 navigate(`/order-success/${dbData.orderId}`);
               } else {
                 throw new Error(dbData.error || 'Failed to sync checkout database order');
               }
             } catch (err) {
-              setOrderError(err.message);
+              navigate('/order-payment-failed');
             } finally {
               setProcessingOrder(false);
             }
@@ -389,7 +419,7 @@ export default function Checkout() {
       document.body.appendChild(script);
 
     } catch (err) {
-      setOrderError(err.message);
+      navigate('/order-payment-failed');
       setProcessingOrder(false);
     }
   };
@@ -720,6 +750,46 @@ export default function Checkout() {
           <h3 className="font-display font-bold text-brand-dark text-lg border-b border-brand-border/60 pb-3 mb-4">
             Cart Total
           </h3>
+
+          {/* Coupon Code Block */}
+          <div className="border-b border-brand-border/60 pb-4 mb-4 select-none">
+            <span className="block font-semibold text-brand-muted uppercase text-[10px] tracking-wider mb-2 font-display">Apply Coupon Code</span>
+            {appliedCoupon ? (
+              <div className="flex justify-between items-center text-xs text-brand-dark font-semibold bg-brand-cream border border-brand-border rounded-lg p-2.5">
+                <div className="flex items-center space-x-1.5 font-sans text-emerald-600">
+                  <Percent size={14} />
+                  <span>Code: <strong>{appliedCoupon.code}</strong> applied!</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={removeCoupon}
+                  className="text-brand-crimson font-bold hover:underline font-sans ml-2 text-2xs"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleCouponSubmit} className="flex space-x-2 font-sans">
+                <input
+                  type="text"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. SWASTIKA10"
+                  className="flex-grow bg-brand-cream border border-brand-border text-brand-dark px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-brand-gold rounded-md"
+                />
+                <button
+                  type="submit"
+                  disabled={couponLoading || !couponCode.trim()}
+                  className="bg-brand-dark hover:bg-brand-muted text-brand-cream px-4 py-2 rounded-md text-xs font-semibold transition-colors disabled:opacity-50"
+                >
+                  {couponLoading ? 'Checking...' : 'Apply'}
+                </button>
+              </form>
+            )}
+            {couponError && (
+              <p className="text-2xs text-brand-crimson font-semibold mt-1.5 font-sans">{couponError}</p>
+            )}
+          </div>
 
           <div className="space-y-3 font-sans text-xs border-b border-brand-border/60 pb-4 mb-4 text-brand-muted">
             <div className="flex justify-between">

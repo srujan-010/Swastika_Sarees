@@ -11,7 +11,9 @@ import aiRouter from './routes/ai.js';
 import ordersRouter from './routes/orders.js';
 import uploadRouter from './routes/upload.js';
 import popupRouter from './routes/popup.js';
+import authRouter from './routes/auth.js';
 import { requireAuth } from './middleware/auth.js';
+import emailTestRouter from './routes/emailTest.js';
 import { User, Order, Product, Lead } from './db/models.js';
 
 const app = express();
@@ -38,10 +40,13 @@ app.use(async (req, res, next) => {
 });
 
 
+// Public Auth Endpoints
+app.use('/api/auth', authRouter);
+
 // Profile endpoints
 app.get('/api/users/profile', requireAuth, async (req, res) => {
   try {
-    const user = await User.findOne({ id: req.user.id });
+    let user = await User.findOne({ id: req.user.id });
     if (!user) return res.status(404).json({ error: 'User profile not found' });
     res.json(user);
   } catch (error) {
@@ -51,13 +56,36 @@ app.get('/api/users/profile', requireAuth, async (req, res) => {
 
 app.put('/api/users/profile', requireAuth, async (req, res) => {
   try {
-    const { fullName, phone } = req.body;
+    const { fullName, phone, dob, gender, profilePhoto, newsletterPref, whatsappPref, walletBalance, savedCart, savedPayments, transactions } = req.body;
+    
+    const updateData = {};
+    if (fullName !== undefined) updateData.fullName = fullName;
+    if (phone !== undefined) updateData.phone = phone;
+    if (dob !== undefined) updateData.dob = dob;
+    if (gender !== undefined) updateData.gender = gender;
+    if (profilePhoto !== undefined) updateData.profilePhoto = profilePhoto;
+    if (newsletterPref !== undefined) updateData.newsletterPref = newsletterPref;
+    if (whatsappPref !== undefined) updateData.whatsappPref = whatsappPref;
+    if (walletBalance !== undefined) updateData.walletBalance = walletBalance;
+    if (savedCart !== undefined) updateData.savedCart = savedCart;
+    if (savedPayments !== undefined) updateData.savedPayments = savedPayments;
+    if (transactions !== undefined) updateData.transactions = transactions;
+
     const user = await User.findOneAndUpdate(
       { id: req.user.id },
-      { fullName, phone },
+      { $set: updateData },
       { new: true, runValidators: true }
     );
     res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/users/profile', requireAuth, async (req, res) => {
+  try {
+    await User.findOneAndDelete({ id: req.user.id });
+    res.json({ message: 'Account deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -428,6 +456,8 @@ app.use('/api/ai', aiRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/popup', popupRouter);
+app.use('/api/email-test', emailTestRouter);
+app.use('/api/auth', emailTestRouter);
 
 // Start Express server locally in development
 const PORT = process.env.PORT || 5005;

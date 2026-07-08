@@ -1,17 +1,57 @@
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { User } from '../db/models.js';
+import jwt from 'jsonwebtoken';
+import * as emailService from '../services/emailService.js';
 
-dotenv.config();
+let googleCertificates = {};
+let lastFetchedCerts = 0;
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-
-// Initialize Supabase Client
-export let supabase = null;
-if (supabaseUrl && supabaseAnonKey) {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
+async function fetchGoogleCerts() {
+  const now = Date.now();
+  if (now - lastFetchedCerts < 3600000 && Object.keys(googleCertificates).length > 0) {
+    return googleCertificates;
+  }
+  try {
+    const res = await fetch('https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com');
+    if (res.ok) {
+      googleCertificates = await res.json();
+      lastFetchedCerts = now;
+    }
+  } catch (error) {
+    console.error('Failed to fetch Google certificates:', error);
+  }
+  return googleCertificates;
 }
+
+async function verifyFirebaseToken(token) {
+  try {
+    const decodedToken = jwt.decode(token, { complete: true });
+    if (!decodedToken || !decodedToken.header || !decodedToken.header.kid) {
+      return null;
+    }
+    
+    const kid = decodedToken.header.kid;
+    const certs = await fetchGoogleCerts();
+    const cert = certs[kid];
+    
+    if (!cert) {
+      return null;
+    }
+    
+    const projectId = process.env.VITE_FIREBASE_PROJECT_ID || 'swastikasarees-e4765';
+    const verified = jwt.verify(token, cert, {
+      algorithms: ['RS256'],
+      audience: projectId,
+      issuer: 'https://securetoken.google.com/' + projectId
+    });
+    
+    return verified;
+  } catch (error) {
+    return null;
+  }
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || 'swastika_sarees_default_secret_key_change_me';
 
 export async function requireAuth(req, res, next) {
   try {
@@ -24,8 +64,6 @@ export async function requireAuth(req, res, next) {
 
     // Mock Token Check for Local Testing / Sandbox
     if (token === 'mock-admin-token') {
-      req.user = { id: 'mock-admin-id', email: 'admin@swastikasarees.com', role: 'admin' };
-      // Sync mock user
       let dbUser = await User.findOne({ id: 'mock-admin-id' });
       if (!dbUser) {
         dbUser = await User.create({
@@ -36,12 +74,17 @@ export async function requireAuth(req, res, next) {
           role: 'admin'
         });
       }
+      req.user = {
+        id: dbUser.id,
+        email: dbUser.email,
+        fullName: dbUser.fullName,
+        phone: dbUser.phone,
+        role: dbUser.role
+      };
       return next();
     }
 
     if (token === 'mock-customer-token') {
-      req.user = { id: 'mock-customer-id', email: 'customer@swastikasarees.com', role: 'customer' };
-      // Sync mock user
       let dbUser = await User.findOne({ id: 'mock-customer-id' });
       if (!dbUser) {
         dbUser = await User.create({
@@ -52,46 +95,69 @@ export async function requireAuth(req, res, next) {
           role: 'customer'
         });
       }
+      req.user = {
+        id: dbUser.id,
+        email: dbUser.email,
+        fullName: dbUser.fullName,
+        phone: dbUser.phone,
+        role: dbUser.role
+      };
       return next();
     }
 
-    if (!supabase) {
-      return res.status(503).json({ error: 'Supabase is not configured on the server. Please use mock tokens.' });
+    // Check if it is a Firebase token
+    const firebasePayload = await verifyFirebaseToken(token);
+    if (firebasePayload) {
+      const firebaseUid = firebasePayload.sub || firebasePayload.user_id;
+      let dbUser = await User.findOne({ id: firebaseUid });
+      if (!dbUser) {
+        const userCount = await User.countDocuments();
+        const role = userCount === 0 ? 'admin' : 'customer';
+        dbUser = await User.create({
+          id: firebaseUid,
+          email: firebasePayload.email,
+          fullName: firebasePayload.name || '',
+          phone: '',
+          role: role
+        });
+        console.log(`Synced new Firebase user ${firebasePayload.email} with role: ${role}`);
+        
+        // Trigger welcome & admin alert emails asynchronously
+        emailService.sendWelcomeEmail(dbUser);
+        emailService.sendAdminNewCustomer(dbUser);
+      }
+      
+      req.user = {
+        id: dbUser.id,
+        email: dbUser.email,
+        fullName: dbUser.fullName,
+        phone: dbUser.phone,
+        role: dbUser.role
+      };
+      return next();
     }
 
-    // Verify token using Supabase Client
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    // Fallback to Native JWT Verification
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const dbUser = await User.findOne({ id: decoded.user.id });
+      
+      if (!dbUser) {
+        return res.status(401).json({ error: 'User not found' });
+      }
 
-    if (error || !user) {
+      req.user = {
+        id: dbUser.id,
+        email: dbUser.email,
+        fullName: dbUser.fullName,
+        phone: dbUser.phone,
+        role: dbUser.role
+      };
+      
+      return next();
+    } catch (jwtError) {
       return res.status(401).json({ error: 'Invalid or expired authorization token' });
     }
-
-    // Sync User with MongoDB
-    let dbUser = await User.findOne({ id: user.id });
-    if (!dbUser) {
-      // Check if this is the very first user in the database to auto-assign admin role
-      const userCount = await User.countDocuments();
-      const role = userCount === 0 ? 'admin' : 'customer';
-
-      dbUser = await User.create({
-        id: user.id,
-        email: user.email,
-        fullName: user.user_metadata?.full_name || user.user_metadata?.name || '',
-        phone: user.phone || user.user_metadata?.phone || '',
-        role: role
-      });
-      console.log(`Synced new user ${user.email} with role: ${role}`);
-    }
-
-    req.user = {
-      id: dbUser.id,
-      email: dbUser.email,
-      fullName: dbUser.fullName,
-      phone: dbUser.phone,
-      role: dbUser.role
-    };
-
-    next();
   } catch (error) {
     console.error('Auth Middleware Error:', error);
     return res.status(500).json({ error: 'Authentication failed internally' });

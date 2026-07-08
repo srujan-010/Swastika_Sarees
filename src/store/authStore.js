@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { supabase, isSupabaseConfigured } from '../utils/supabase';
+import { auth } from '../utils/firebase';
+import { signInWithPopup, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
 
 export const useAuthStore = create((set, get) => ({
   user: null,
@@ -10,54 +11,29 @@ export const useAuthStore = create((set, get) => ({
   initialize: async () => {
     set({ loading: true });
     
-    // Check if we have a stored mock token
     const token = localStorage.getItem('swastika_token');
     const mockUser = localStorage.getItem('swastika_mock_user');
 
-    if (token && token.startsWith('mock-')) {
-      try {
-        set({ token, user: JSON.parse(mockUser), loading: false });
-        // Refresh profile from DB
-        await get().fetchProfile();
-        return;
-      } catch (e) {
-        get().logout();
-      }
-    }
-
-    if (!isSupabaseConfigured()) {
-      set({ loading: false });
-      return;
-    }
-
-    try {
-      // Get current Supabase session
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (error) throw error;
-
-      if (session) {
-        const token = session.access_token;
-        localStorage.setItem('swastika_token', token);
-        set({ token });
-        
-        // Fetch MongoDB synced profile details
-        await get().fetchProfile();
-      }
-      
-      // Listen for auth changes
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session) {
-          const token = session.access_token;
-          localStorage.setItem('swastika_token', token);
-          set({ token });
+    if (token) {
+      if (token.startsWith('mock-')) {
+        try {
+          set({ token, user: JSON.parse(mockUser), loading: false });
           await get().fetchProfile();
-        } else {
+          return;
+        } catch (e) {
           get().logout();
         }
-      });
-    } catch (err) {
-      set({ error: err.message });
-    } finally {
+      } else {
+        try {
+          set({ token });
+          await get().fetchProfile();
+          set({ loading: false });
+          return;
+        } catch (e) {
+          get().logout();
+        }
+      }
+    } else {
       set({ loading: false });
     }
   },
@@ -88,6 +64,7 @@ export const useAuthStore = create((set, get) => ({
       localStorage.setItem('swastika_mock_user', JSON.stringify(data));
     } catch (err) {
       console.error('Error fetching user profile:', err);
+      throw err;
     }
   },
 
@@ -116,39 +93,22 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  // 2. Real Supabase Logins
+  // 2. Native MongoDB Logins
   login: async (email, password) => {
     set({ loading: true, error: null });
-    if (!isSupabaseConfigured()) {
-      // Simulation mode: authenticate user with mock token
-      const mockToken = 'mock-customer-token';
-      localStorage.setItem('swastika_token', mockToken);
-      set({ token: mockToken });
-      try {
-        const response = await fetch('/api/users/profile', {
-          headers: {
-            'Authorization': `Bearer ${mockToken}`
-          }
-        });
-        const data = await response.json();
-        if (response.ok) {
-          set({ user: data, loading: false });
-          localStorage.setItem('swastika_mock_user', JSON.stringify(data));
-          return true;
-        } else {
-          throw new Error(data.error || 'Failed to initialize simulation customer profile.');
-        }
-      } catch (err) {
-        set({ error: err.message, loading: false });
-        return false;
-      }
-    }
-
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await response.json();
       
-      const token = data.session.access_token;
+      if (!response.ok) {
+        throw new Error(data.error || 'Login failed');
+      }
+      
+      const token = data.token;
       localStorage.setItem('swastika_token', token);
       set({ token });
       await get().fetchProfile();
@@ -162,33 +122,23 @@ export const useAuthStore = create((set, get) => ({
 
   signUp: async (email, password, fullName, phone) => {
     set({ loading: true, error: null });
-    if (!isSupabaseConfigured()) {
-      // Simulation mode signup success
-      set({ loading: false });
-      return true;
-    }
-
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            phone: phone
-          }
-        }
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, fullName, phone })
       });
-      if (error) throw error;
+      const data = await response.json();
 
-      // In some configurations, Supabase returns session immediately if email confirmation is off
-      if (data.session) {
-        const token = data.session.access_token;
-        localStorage.setItem('swastika_token', token);
-        set({ token });
-        await get().fetchProfile();
+      if (!response.ok) {
+        throw new Error(data.error || 'Registration failed');
       }
 
+      const token = data.token;
+      localStorage.setItem('swastika_token', token);
+      set({ token });
+      await get().fetchProfile();
+      
       set({ loading: false });
       return true;
     } catch (err) {
@@ -198,28 +148,48 @@ export const useAuthStore = create((set, get) => ({
   },
 
   loginWithGoogle: async () => {
-    if (!isSupabaseConfigured()) {
-      set({ error: 'Supabase is not configured.' });
-      return;
+    set({ loading: true, error: null });
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const token = await result.user.getIdToken();
+      
+      localStorage.setItem('swastika_token', token);
+      set({ token });
+      await get().fetchProfile();
+      set({ loading: false });
+      return true;
+    } catch (err) {
+      set({ error: err.message, loading: false });
+      return false;
     }
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin
-      }
-    });
+  },
+
+  loginWithApple: async () => {
+    set({ loading: true, error: null });
+    try {
+      const provider = new OAuthProvider('apple.com');
+      const result = await signInWithPopup(auth, provider);
+      const token = await result.user.getIdToken();
+      
+      localStorage.setItem('swastika_token', token);
+      set({ token });
+      await get().fetchProfile();
+      set({ loading: false });
+      return true;
+    } catch (err) {
+      set({ error: err.message, loading: false });
+      return false;
+    }
   },
 
   logout: async () => {
-    if (isSupabaseConfigured()) {
-      await supabase.auth.signOut();
-    }
     localStorage.removeItem('swastika_token');
     localStorage.removeItem('swastika_mock_user');
-    set({ user: null, token: null, error: null });
+    set({ user: null, token: null, error: null, loading: false });
   },
 
-  updateProfile: async (fullName, phone) => {
+  updateProfile: async (profileData) => {
     const { token } = get();
     try {
       const response = await fetch('/api/users/profile', {
@@ -228,7 +198,7 @@ export const useAuthStore = create((set, get) => ({
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ fullName, phone })
+        body: JSON.stringify(profileData)
       });
       const data = await response.json();
       if (response.ok) {

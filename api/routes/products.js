@@ -443,14 +443,17 @@ router.post('/', requireAdmin, async (req, res) => {
       },
       variants: variants || [],
       seo: seo || { metaTitle: name, metaDescription: description?.replace(/<[^>]*>/g, '').substring(0, 160) },
-      brand, productVideo, productHighlights, dispatchTime,
+      brand, productVideo, productHighlights,
       colorName, colorHex, specifications: specifications || {},
       rating: rating ? parseFloat(rating) : undefined,
       reviewsCount: reviewsCount ? parseInt(reviewsCount) : undefined
     };
 
-    if (availability !== "") {
+    if (availability && availability !== "") {
       productData.availability = availability;
+    }
+    if (dispatchTime && dispatchTime !== "") {
+      productData.dispatchTime = dispatchTime;
     }
 
     const product = await Product.create(productData);
@@ -523,14 +526,21 @@ router.put('/:id', requireAdmin, async (req, res) => {
       },
       variants: variants || [],
       seo: seo || { metaTitle: name, metaDescription: description?.replace(/<[^>]*>/g, '').substring(0, 160) },
-      brand, productVideo, productHighlights, dispatchTime,
+      brand, productVideo, productHighlights,
       colorName, colorHex, specifications: specifications || {},
       rating: rating ? parseFloat(rating) : undefined,
       reviewsCount: reviewsCount ? parseInt(reviewsCount) : undefined
     };
 
-    if (availability !== "") {
+    if (availability && availability !== "") {
       updatedData.availability = availability;
+    } else {
+      updatedData.availability = undefined;
+    }
+    if (dispatchTime && dispatchTime !== "") {
+      updatedData.dispatchTime = dispatchTime;
+    } else {
+      updatedData.dispatchTime = undefined;
     }
 
     const product = await Product.findByIdAndUpdate(prodId, updatedData, { new: true, runValidators: true }).populate('category');

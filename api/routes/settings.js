@@ -1,6 +1,9 @@
 import express from 'express';
 import { Setting } from '../db/models.js';
 import { requireAdmin } from '../middleware/auth.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const router = express.Router();
 
@@ -17,6 +20,9 @@ router.get('/', async (req, res) => {
     // NEVER expose secrets to storefront
     delete cleanSettings.razorpaySecret;
     
+    // Fallback to environment variable if not set in database settings
+    cleanSettings.razorpayKeyId = cleanSettings.razorpayKeyId || process.env.VITE_RAZORPAY_KEY_ID || '';
+    
     res.json(cleanSettings);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -30,7 +36,11 @@ router.get('/admin', requireAdmin, async (req, res) => {
     if (!setting) {
       setting = await Setting.create({});
     }
-    res.json(setting);
+    const adminSettings = setting.toObject();
+    // Fallback to environment variables if not set in database settings
+    adminSettings.razorpayKeyId = adminSettings.razorpayKeyId || process.env.VITE_RAZORPAY_KEY_ID || '';
+    adminSettings.razorpaySecret = adminSettings.razorpaySecret || process.env.RAZORPAY_SECRET || '';
+    res.json(adminSettings);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

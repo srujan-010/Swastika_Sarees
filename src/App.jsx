@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 
 // Layout & navigation components
@@ -18,6 +18,7 @@ import WishlistPage from './pages/WishlistPage';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import OrderSuccess from './pages/OrderSuccess';
+import PaymentFailed from './pages/PaymentFailed';
 import OrdersHistory from './pages/OrdersHistory';
 import OrderDetail from './pages/OrderDetail';
 import Account from './pages/Account';
@@ -64,7 +65,8 @@ function AnimatedRoutes() {
           <Route path="/cart" element={<Cart />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/order-success/:orderId" element={<OrderSuccess />} />
-          <Route path="/orders" element={<OrdersHistory />} />
+          <Route path="/order-payment-failed" element={<PaymentFailed />} />
+          <Route path="/orders" element={<Navigate to="/account?tab=orders" replace />} />
           <Route path="/orders/:orderId" element={<OrderDetail />} />
           <Route path="/account" element={<Account />} />
           <Route path="/login" element={<Login />} />

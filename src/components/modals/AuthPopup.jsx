@@ -12,7 +12,7 @@ const IconComponent = ({ name, size = 16, className = '' }) => {
 };
 
 export default function AuthPopup() {
-  const { user, login, signUp, loginWithGoogle } = useAuthStore();
+  const { user, login, signUp, loginWithGoogle, loginWithApple } = useAuthStore();
   const { success } = useModalStore();
   
   const [isOpen, setIsOpen] = useState(false);
@@ -129,10 +129,25 @@ export default function AuthPopup() {
 
   const handleGoogle = async () => {
     try {
-      await loginWithGoogle();
-      // the redirect will happen via supabase, so it will reload
+      const successLog = await loginWithGoogle();
+      if (successLog) {
+        handleClose();
+        success('Welcome to Swastika Sarees!', 'Successfully logged in with Google.');
+      }
     } catch (err) {
       setError('Failed to login with Google');
+    }
+  };
+
+  const handleApple = async () => {
+    try {
+      const successLog = await loginWithApple();
+      if (successLog) {
+        handleClose();
+        success('Welcome to Swastika Sarees!', 'Successfully logged in with Apple.');
+      }
+    } catch (err) {
+      setError('Failed to login with Apple');
     }
   };
 
@@ -367,29 +382,30 @@ export default function AuthPopup() {
               </form>
 
               {/* Social Logins */}
+              <div className="flex items-center gap-4 my-6 opacity-80 select-none">
+                <div className="h-px bg-gray-300 flex-1"></div>
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Or continue with</span>
+                <div className="h-px bg-gray-300 flex-1"></div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 select-none">
+                <button type="button" onClick={handleGoogle} className="flex items-center justify-center gap-2 h-12 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors active:bg-gray-100">
+                  <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-4 h-4" alt="Google" /> {settings.buttons?.google || 'Google'}
+                </button>
+                <button type="button" onClick={handleApple} className="flex items-center justify-center gap-2 h-12 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors active:bg-gray-100">
+                  <svg viewBox="0 0 384 512" className="w-4 h-4 fill-current text-black" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-48.7-22.7-79.4-22-38.1 1.2-76.3 22.8-97.5 59.8-35.7 62.5-9.1 185.5 25.1 244.6 16.9 29.2 38 61.8 68.6 60.5 27.6-1.1 38.1-17.7 73.6-17.7 35.7 0 45 17.7 73.6 17.1 31.2-.6 50.2-29.4 68.4-56.1 20.5-30 29-59.4 29.4-61-1-.4-54.8-20.5-55-79.5zm-51.2-181c20.3-24.3 33.6-58.2 29.4-91.7-28.7 1.1-64 19.3-84.6 44.1-17.8 20.9-33.3 55.4-28.3 88 32.2 2.5 64.9-16.1 83.5-40.4z" />
+                  </svg>
+                  {settings.buttons?.apple || 'Apple'}
+                </button>
+              </div>
+
               {activeTab === 'signin' && (
-                <>
-                  <div className="flex items-center gap-4 my-6 opacity-80">
-                    <div className="h-px bg-gray-300 flex-1"></div>
-                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Or continue with</span>
-                    <div className="h-px bg-gray-300 flex-1"></div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <button type="button" onClick={handleGoogle} className="flex items-center justify-center gap-2 h-12 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors active:bg-gray-100">
-                      <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-4 h-4" alt="Google" /> {settings.buttons?.google || 'Google'}
-                    </button>
-                    <button type="button" disabled className="flex items-center justify-center gap-2 h-12 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-400 cursor-not-allowed">
-                      <img src="https://www.svgrepo.com/show/448202/apple.svg" className="w-4 h-4 opacity-50" alt="Apple" /> {settings.buttons?.apple || 'Apple'}
-                    </button>
-                  </div>
-
-                  <div className="mt-8 text-center">
-                    <button type="button" onClick={handleClose} className="text-[13px] font-bold text-gray-500 hover:text-brand-dark transition-colors p-2">
-                      {settings.buttons?.guest || 'Continue as Guest'}
-                    </button>
-                  </div>
-                </>
+                <div className="mt-8 text-center select-none">
+                  <button type="button" onClick={handleClose} className="text-[13px] font-bold text-gray-500 hover:text-brand-dark transition-colors p-2">
+                    {settings.buttons?.guest || 'Continue as Guest'}
+                  </button>
+                </div>
               )}
 
               {/* Toggle links */}

@@ -170,6 +170,18 @@ router.post('/manual', requireAdmin, async (req, res) => {
   }
 });
 
+// GET current customer's reviews (requireAuth)
+router.get('/my-reviews', requireAuth, async (req, res) => {
+  try {
+    const reviews = await Review.find({ user: req.user.id })
+      .populate('product', 'name slug images')
+      .sort({ createdAt: -1 });
+    res.json(reviews);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET all reviews (Admin or Public)
 router.get('/all', async (req, res) => {
   try {

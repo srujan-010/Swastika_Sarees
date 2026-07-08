@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 
 const { Schema } = mongoose;
 
@@ -14,14 +15,49 @@ const AddressSchema = new Schema({
   isDefault: { type: Boolean, default: false }
 }, { _id: true });
 
+// 1b. Sub-schemas for Extended User Profile
+const TransactionSchema = new Schema({
+  type: { type: String, enum: ['Credit', 'Debit'], required: true },
+  amountPaise: { type: Number, required: true },
+  description: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const SavedCartItemSchema = new Schema({
+  product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
+  color: { type: String },
+  size: { type: String },
+  quantity: { type: Number, default: 1 }
+});
+
+const SavedPaymentSchema = new Schema({
+  type: { type: String, enum: ['card', 'upi', 'netbanking'], required: true },
+  maskedValue: { type: String, required: true },
+  name: { type: String },
+  expiry: { type: String }
+});
+
 // 2. User Schema
 const UserSchema = new Schema({
-  id: { type: String, required: true, unique: true }, // Maps to Supabase Auth user UUID
+  id: { type: String, required: true, unique: true, default: () => crypto.randomUUID() }, // Maps to Supabase Auth user UUID (legacy) or native UUID
   email: { type: String, required: true, unique: true },
+  password: { type: String }, // For native authentication
   fullName: { type: String },
   phone: { type: String },
   role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
   addresses: [AddressSchema],
+  profilePhoto: { type: String, default: '' },
+  dob: { type: String, default: '' },
+  gender: { type: String, default: '' },
+  rewardPoints: { type: Number, default: 0 },
+  loyaltyTier: { type: String, enum: ['Silver', 'Gold', 'Platinum'], default: 'Silver' },
+  walletBalance: { type: Number, default: 0 }, // in paise
+  cashbackBalance: { type: Number, default: 0 }, // in paise
+  newsletterPref: { type: Boolean, default: true },
+  whatsappPref: { type: Boolean, default: true },
+  transactions: [TransactionSchema],
+  savedCart: [SavedCartItemSchema],
+  savedPayments: [SavedPaymentSchema]
 }, { timestamps: true });
 
 // 3. Category Schema
@@ -172,7 +208,7 @@ const OrderSchema = new Schema({
   payment: {
     method: { type: String, enum: ['razorpay', 'cod'], required: true },
     transactionId: { type: String }, // Razorpay payment ID
-    status: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' },
+    status: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
     refundDetails: { type: String }
   },
   status: {

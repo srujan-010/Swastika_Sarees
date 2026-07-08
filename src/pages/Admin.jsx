@@ -16,6 +16,7 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, PieChart, 
 import { useModalStore } from '../store/modalStore';
 import AdminBannerForm from '../components/admin/AdminBannerForm';
 import AdminPopupSettings from '../components/admin/AdminPopupSettings';
+import OrdersDashboard from '../components/admin/OrdersDashboard';
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -144,7 +145,7 @@ export default function Admin() {
         {activeTab === 'categories' && <CategoriesView token={token} />}
 
         {/* Tab 4: Orders Management */}
-        {activeTab === 'orders' && <OrdersView token={token} />}
+        {activeTab === 'orders' && <OrdersDashboard token={token} />}
 
         {/* Tab 5: Customers List */}
         {activeTab === 'customers' && <CustomersView token={token} />}
@@ -193,16 +194,20 @@ function DeniedView() {
 function DashboardView({ token }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [timeRange, setTimeRange] = useState('30d');
   const navigate = useNavigate();
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
     fetch(`/api/admin/analytics?range=${timeRange}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => {
-        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+        if (!res.ok) {
+          throw new Error(`HTTP error! Status: ${res.status}`);
+        }
         return res.json();
       })
       .then(d => {
@@ -211,6 +216,7 @@ function DashboardView({ token }) {
       })
       .catch(err => {
         console.error('Fetch analytics error:', err);
+        setError(err.message);
         setLoading(false);
       });
   }, [token, timeRange]);
@@ -218,6 +224,14 @@ function DashboardView({ token }) {
   if (loading && !data) return (
     <div className="flex items-center justify-center h-[70vh]">
       <Loader2 size={40} className="animate-spin text-brand-dark" />
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex flex-col items-center justify-center h-[70vh] text-center px-4">
+      <AlertTriangle className="text-brand-crimson mb-2" size={32} />
+      <h3 className="font-semibold text-brand-dark">Failed to load analytics</h3>
+      <p className="text-xs text-brand-muted mt-1">{error}</p>
     </div>
   );
 

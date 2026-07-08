@@ -4,6 +4,16 @@ import { requireAdmin, requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// GET all active coupons (Storefront)
+router.get('/active', async (req, res) => {
+  try {
+    const coupons = await Coupon.find({ isActive: true, validUntil: { $gte: new Date() } });
+    res.json(coupons);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET validate a coupon (Storefront)
 router.get('/validate/:code', async (req, res) => {
   try {

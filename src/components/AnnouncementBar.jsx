@@ -2,18 +2,40 @@ import React, { useEffect, useState } from 'react';
 
 export default function AnnouncementBar() {
   const [settings, setSettings] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
     fetch('/api/settings')
       .then(res => {
         if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
         return res.json();
       })
-      .then(data => setSettings(data))
-      .catch(err => console.error('Failed to load settings in announcement bar:', err));
+      .then(data => {
+        if (active) {
+          setSettings(data);
+          setLoading(false);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load settings in announcement bar:', err);
+        if (active) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
-  // Return standard marquee if loading or disabled is not explicit
+  if (loading) {
+    return (
+      <div className="w-full bg-brand-crimson/95 h-[36px] skeleton-shimmer border-b border-brand-gold/20 flex items-center justify-center">
+        <div className="h-2 w-1/3 bg-brand-cream/35 rounded animate-pulse"></div>
+      </div>
+    );
+  }
+
   const showBar = settings ? settings.announcementActive !== false : true; 
   const marqueeText = settings?.announcementText || "🚚 Free shipping on orders above ₹999 | Use code SWASTIKA10 for 10% off your first order | Shipping all over India";
 

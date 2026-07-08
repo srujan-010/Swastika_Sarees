@@ -399,53 +399,16 @@ export default function Navbar() {
               )}
             </Link>
 
-            {/* Account dropdown */}
+            {/* Account link */}
             <div className="relative">
               {user ? (
-                <div>
-                  <button
-                    onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                    className="flex items-center space-x-1 p-2 text-brand-dark hover:text-brand-crimson transition-colors rounded-md hover:bg-brand-cream"
-                    aria-label="Account menu"
-                    aria-expanded={profileDropdownOpen}
-                  >
-                    <UserIcon size={22} />
-                    <ChevronDown size={14} className="hidden sm:inline" />
-                  </button>
-                  {profileDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-brand-white border border-brand-border ring-1 ring-black ring-opacity-5 z-50">
-                      <div className="px-4 py-2 border-b border-brand-border/60 text-xs font-semibold text-brand-muted truncate">
-                        Hi, {user.fullName || 'User'}
-                      </div>
-                      {user.role === 'admin' && (
-                        <Link
-                          to="/admin"
-                          className="flex items-center px-4 py-2 text-sm text-brand-gold font-medium hover:bg-brand-cream hover:text-brand-crimson"
-                        >
-                          <ShieldCheck size={16} className="mr-2" /> Admin Dashboard
-                        </Link>
-                      )}
-                      <Link
-                        to="/account"
-                        className="block px-4 py-2 text-sm text-brand-dark hover:bg-brand-cream hover:text-brand-crimson"
-                      >
-                        My Account
-                      </Link>
-                      <Link
-                        to="/orders"
-                        className="block px-4 py-2 text-sm text-brand-dark hover:bg-brand-cream hover:text-brand-crimson"
-                      >
-                        Order History
-                      </Link>
-                      <button
-                        onClick={() => { logout(); navigate('/'); }}
-                        className="w-full text-left flex items-center px-4 py-2 text-sm text-brand-crimson border-t border-brand-border/40 hover:bg-brand-cream"
-                      >
-                        <LogOut size={16} className="mr-2" /> Logout
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <Link
+                  to="/account"
+                  className="flex items-center p-2 text-brand-dark hover:text-brand-crimson transition-colors rounded-md hover:bg-brand-cream"
+                  aria-label="My Account"
+                >
+                  <UserIcon size={22} />
+                </Link>
               ) : (
                 <Link
                   to="/login"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Trash2, Heart, ArrowRight, ShoppingCart, Percent, AlertCircle, Plus, Minus } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
@@ -22,8 +22,13 @@ export default function Cart() {
     getCouponDiscount,
     getShippingCharge,
     getTotal,
-    shippingThreshold
+    shippingThreshold,
+    fetchSettings
   } = useCartStore();
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
 
   const { toggleWishlist } = useWishlistStore();
   const [couponCode, setCouponCode] = useState('');

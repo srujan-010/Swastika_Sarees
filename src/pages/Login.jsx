@@ -8,7 +8,7 @@ import { scaleUp } from '../utils/animations';
 export default function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, login, signUp, logout, error, loading } = useAuthStore();
+  const { user, login, signUp, logout, error, loading, loginWithGoogle, loginWithApple } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
   const [email, setEmail] = useState('');
@@ -68,6 +68,32 @@ export default function Login() {
         setFormError('Account created successfully! Please log in.');
         setActiveTab('login');
       }
+    }
+  };
+
+  const handleGoogle = async () => {
+    try {
+      const success = await loginWithGoogle();
+      if (success) {
+        const updatedUser = useAuthStore.getState().user;
+        if (updatedUser && updatedUser.role === 'admin') navigate('/admin');
+        else navigate(searchParams.get('redirect') || '/');
+      }
+    } catch (err) {
+      setFormError('Failed to login with Google');
+    }
+  };
+
+  const handleApple = async () => {
+    try {
+      const success = await loginWithApple();
+      if (success) {
+        const updatedUser = useAuthStore.getState().user;
+        if (updatedUser && updatedUser.role === 'admin') navigate('/admin');
+        else navigate(searchParams.get('redirect') || '/');
+      }
+    } catch (err) {
+      setFormError('Failed to login with Apple');
     }
   };
 
@@ -219,6 +245,25 @@ export default function Login() {
           </button>
           </motion.form>
         </AnimatePresence>
+
+        {/* Social Logins */}
+        <div className="flex items-center gap-4 my-6 opacity-80 select-none">
+          <div className="h-px bg-gray-300 flex-1"></div>
+          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Or continue with</span>
+          <div className="h-px bg-gray-300 flex-1"></div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 select-none">
+          <button type="button" onClick={handleGoogle} disabled={loading} className="flex items-center justify-center gap-2 h-12 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors active:bg-gray-100 disabled:opacity-50">
+            <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-4 h-4" alt="Google" /> Google
+          </button>
+          <button type="button" onClick={handleApple} disabled={loading} className="flex items-center justify-center gap-2 h-12 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors active:bg-gray-100 disabled:opacity-50">
+            <svg viewBox="0 0 384 512" className="w-4 h-4 fill-current text-black" xmlns="http://www.w3.org/2000/svg">
+              <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-48.7-22.7-79.4-22-38.1 1.2-76.3 22.8-97.5 59.8-35.7 62.5-9.1 185.5 25.1 244.6 16.9 29.2 38 61.8 68.6 60.5 27.6-1.1 38.1-17.7 73.6-17.7 35.7 0 45 17.7 73.6 17.1 31.2-.6 50.2-29.4 68.4-56.1 20.5-30 29-59.4 29.4-61-1-.4-54.8-20.5-55-79.5zm-51.2-181c20.3-24.3 33.6-58.2 29.4-91.7-28.7 1.1-64 19.3-84.6 44.1-17.8 20.9-33.3 55.4-28.3 88 32.2 2.5 64.9-16.1 83.5-40.4z" />
+            </svg>
+            Apple
+          </button>
+        </div>
 
       </div>
 

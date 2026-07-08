@@ -2,6 +2,10 @@ import express from 'express';
 import crypto from 'crypto';
 import { Order, Product, Coupon, User } from '../db/models.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import * as emailService from '../services/emailService.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const router = express.Router();
 
@@ -172,6 +176,10 @@ router.post('/', async (req, res) => {
         }
       }
       await item.product.save();
+      // Check if product stock is low (threshold of 5 items)
+      if (item.product.stock <= 5) {
+        emailService.sendAdminLowStock(item.product, item.color || item.size ? `${item.color || ''} ${item.size || ''}` : 'Main product');
+      }
     }
 
     // 4. Update coupon uses if applied
@@ -214,6 +222,18 @@ router.post('/', async (req, res) => {
       },
       status: 'pending'
     });
+
+    // Asynchronously trigger emails without blocking Express response
+    emailService.sendOrderConfirmationEmail(order);
+    emailService.sendAdminNewOrder(order);
+
+    if (order.pricing.total > 2000000) { // Large Order Alert (threshold ₹20,000 in paise)
+      emailService.sendAdminLargeOrder(order);
+    }
+
+    if (order.payment.status === 'paid') {
+      emailService.sendPaymentSuccessfulEmail(order);
+    }
 
     res.status(201).json(order);
   } catch (error) {
@@ -266,7 +286,24 @@ router.get('/detail/:orderId', async (req, res) => {
   }
 });
 
-// 5. GET Guest Order Tracking by Phone + Order ID
+// 4b. GET Order Success Page Data — Public, no auth required
+// Uses SS-XXXXX orderId (sequential ID), not MongoDB _id
+// Returns full order with populated product refs for the success page
+router.get('/success/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = await Order.findOne({ orderId })
+      .populate('items.product', 'name slug images price originalPrice category');
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 router.get('/track', async (req, res) => {
   try {
     const { orderId, phone } = req.query;
@@ -329,15 +366,53 @@ router.get('/all', requireAdmin, async (req, res) => {
 // 7. PUT update status & tracking (Admin only)
 router.put('/:id/status', requireAdmin, async (req, res) => {
   try {
-    const { status, courierName, trackingNumber, trackingUrl, internalNotes } = req.body;
+    const { status, courierName, trackingNumber, trackingUrl, internalNotes, paymentStatus, refundCompleted } = req.body;
     const order = await Order.findById(req.params.id);
 
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    const oldStatus = order.status;
+    const oldPaymentStatus = order.payment.status;
+
     order.status = status || order.status;
     order.internalNotes = internalNotes || order.internalNotes;
+
+    if (paymentStatus) {
+      order.payment.status = paymentStatus;
+    }
+
+    // Automated Razorpay Refund Logic
+    if (refundCompleted && order.payment.method === 'razorpay' && order.payment.transactionId && oldPaymentStatus !== 'refunded') {
+      const keyId = process.env.VITE_RAZORPAY_KEY_ID;
+      const secret = process.env.RAZORPAY_SECRET;
+      
+      if (keyId && secret && !order.payment.transactionId.startsWith('mock_') && !order.payment.transactionId.startsWith('cod_')) {
+        try {
+          const rzpResponse = await fetch(`https://api.razorpay.com/v1/payments/${order.payment.transactionId}/refund`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Basic ${Buffer.from(`${keyId}:${secret}`).toString('base64')}`
+            },
+            body: JSON.stringify({ amount: order.pricing.total }) // amount is in paise
+          });
+          
+          const rzpData = await rzpResponse.json();
+          if (!rzpResponse.ok) {
+            console.error('Razorpay Refund Failed:', rzpData);
+            return res.status(400).json({ error: `Razorpay Refund Failed: ${rzpData.error?.description || 'Unknown Error'}` });
+          }
+          
+          order.payment.refundDetails = rzpData.id; // Save Razorpay Refund ID
+          console.log(`[Razorpay Refund] Success for Order ${order.orderId} - Refund ID: ${rzpData.id}`);
+        } catch (rzpErr) {
+          console.error('Razorpay Refund API Error:', rzpErr);
+          return res.status(500).json({ error: 'Failed to communicate with Razorpay API for refund.' });
+        }
+      }
+    }
 
     if (status === 'shipped') {
       order.tracking = {
@@ -353,6 +428,27 @@ router.put('/:id/status', requireAdmin, async (req, res) => {
     }
 
     await order.save();
+
+    // Trigger emails asynchronously on updates
+    if (status && status !== oldStatus) {
+      if (status === 'cancelled') {
+        emailService.sendOrderCancelledEmail(order, 'Cancelled by Admin');
+        if (order.payment.status === 'paid') {
+          emailService.sendRefundInitiatedEmail(order);
+        }
+      } else {
+        emailService.sendOrderStatusEmail(order, status);
+      }
+    }
+
+    if (paymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
+      emailService.sendPaymentSuccessfulEmail(order);
+    }
+
+    if (refundCompleted) {
+      emailService.sendRefundCompletedEmail(order);
+    }
+
     res.json(order);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -406,6 +502,13 @@ router.put('/:id/cancel', requireAuth, async (req, res) => {
     }
 
     await order.save();
+
+    // Trigger cancel emails asynchronously
+    emailService.sendOrderCancelledEmail(order, reason || 'Cancelled by user');
+    if (order.payment.status === 'paid') {
+      emailService.sendRefundInitiatedEmail(order);
+    }
+
     res.json({ message: 'Order cancelled and stock updated.', order });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -444,6 +547,10 @@ router.post('/:id/return', requireAuth, async (req, res) => {
     order.status = 'processing'; // Change to processing for return review
 
     await order.save();
+
+    // Trigger return request email alert to admin
+    emailService.sendAdminRefundRequest(order, `[Return Request: ${type}] Reason: ${reason}`);
+
     res.json({ message: 'Return request submitted. Our team will review and approve via WhatsApp.', order });
   } catch (error) {
     res.status(500).json({ error: error.message });
